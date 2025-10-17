@@ -2,9 +2,14 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { HeartPulse } from "lucide-react";
+import { HeartPulse, Plus } from "lucide-react";
 
 interface Nurse {
   id: string;
@@ -17,6 +22,16 @@ const Nurses = () => {
   const { toast } = useToast();
   const [nurses, setNurses] = useState<Nurse[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showAddDialog, setShowAddDialog] = useState(false);
+  const [newNurse, setNewNurse] = useState<{
+    name: string;
+    nurse_no: string;
+    department: "WARD" | "OR" | "ICU" | "ER" | "HEMO" | "";
+  }>({
+    name: "",
+    nurse_no: "",
+    department: "",
+  });
 
   useEffect(() => {
     fetchNurses();
@@ -40,6 +55,43 @@ const Nurses = () => {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleAddNurse = async () => {
+    if (!newNurse.name || !newNurse.nurse_no || !newNurse.department) {
+      toast({
+        title: "Missing Fields",
+        description: "Please fill in all fields",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const { error } = await supabase.from("nurses").insert([{
+        name: newNurse.name,
+        nurse_no: newNurse.nurse_no,
+        department: newNurse.department as any
+      }]);
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: "Nurse added successfully",
+      });
+
+      setShowAddDialog(false);
+      setNewNurse({ name: "", nurse_no: "", department: "" });
+      fetchNurses();
+    } catch (error: any) {
+      console.error("Error adding nurse:", error);
+      toast({
+        title: "Error",
+        description: "Failed to add nurse",
+        variant: "destructive",
+      });
     }
   };
 
@@ -90,9 +142,65 @@ const Nurses = () => {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div>
-        <h1 className="text-3xl font-bold text-primary">Nursing Staff</h1>
-        <p className="text-muted-foreground">Directory of nurses by department</p>
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-bold text-primary">Nursing Staff</h1>
+          <p className="text-muted-foreground">Directory of nurses by department</p>
+        </div>
+        <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
+          <DialogTrigger asChild>
+            <Button>
+              <Plus className="h-4 w-4 mr-2" />
+              Add Nurse
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Add New Nurse</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="name">Full Name</Label>
+                <Input
+                  id="name"
+                  value={newNurse.name}
+                  onChange={(e) => setNewNurse({ ...newNurse, name: e.target.value })}
+                  placeholder="Enter full name"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="nurse_no">Nurse Number</Label>
+                <Input
+                  id="nurse_no"
+                  value={newNurse.nurse_no}
+                  onChange={(e) => setNewNurse({ ...newNurse, nurse_no: e.target.value })}
+                  placeholder="e.g., N001"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="department">Department</Label>
+                <Select
+                  value={newNurse.department}
+                  onValueChange={(value) => setNewNurse({ ...newNurse, department: value as typeof newNurse.department })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select department" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="WARD">WARD</SelectItem>
+                    <SelectItem value="OR">OR</SelectItem>
+                    <SelectItem value="ICU">ICU</SelectItem>
+                    <SelectItem value="ER">ER</SelectItem>
+                    <SelectItem value="HEMO">HEMO</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button onClick={handleAddNurse} className="w-full">
+                Add Nurse
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
 
       <Tabs defaultValue="WARD" className="space-y-4">

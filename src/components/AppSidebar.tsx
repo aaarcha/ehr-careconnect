@@ -1,4 +1,4 @@
-import { Home, Users, UserCog, FileText, FilePlus, Menu, Activity, TestTube, Scan } from "lucide-react";
+import { Home, Users, UserCog, FileText, FilePlus, Menu, Activity, TestTube, Scan, Settings, MessageSquare, HelpCircle } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -61,6 +61,9 @@ export function AppSidebar() {
         { title: "Nurses", url: "/dashboard/nurses", icon: UserCog },
         { title: "Patient Records", url: "/dashboard/patients", icon: FileText },
         { title: "Add Patient", url: "/dashboard/add-patient", icon: FilePlus },
+        { title: "Messages", url: "/dashboard/messages", icon: MessageSquare },
+        { title: "Settings", url: "/dashboard/settings", icon: Settings },
+        { title: "Help", url: "/dashboard/help", icon: HelpCircle },
       ];
     }
 
@@ -68,6 +71,9 @@ export function AppSidebar() {
       return [
         ...baseItems,
         { title: "Labs", url: "/dashboard/labs", icon: TestTube },
+        { title: "Messages", url: "/dashboard/messages", icon: MessageSquare },
+        { title: "Settings", url: "/dashboard/settings", icon: Settings },
+        { title: "Help", url: "/dashboard/help", icon: HelpCircle },
       ];
     }
 
@@ -75,6 +81,9 @@ export function AppSidebar() {
       return [
         ...baseItems,
         { title: "Imaging", url: "/dashboard/imaging", icon: Scan },
+        { title: "Messages", url: "/dashboard/messages", icon: MessageSquare },
+        { title: "Settings", url: "/dashboard/settings", icon: Settings },
+        { title: "Help", url: "/dashboard/help", icon: HelpCircle },
       ];
     }
 
@@ -82,6 +91,9 @@ export function AppSidebar() {
       return [
         ...baseItems,
         { title: "My Records", url: "/dashboard/my-records", icon: FileText },
+        { title: "Messages", url: "/dashboard/messages", icon: MessageSquare },
+        { title: "Settings", url: "/dashboard/settings", icon: Settings },
+        { title: "Help", url: "/dashboard/help", icon: HelpCircle },
       ];
     }
 

@@ -5,12 +5,25 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { ArrowLeft, Plus } from "lucide-react";
+import { ArrowLeft, Plus, Edit, Archive, ArchiveRestore, Trash2, UserPlus } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { format } from "date-fns";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface Patient {
   id: string;
@@ -21,6 +34,15 @@ interface Patient {
   date_of_birth: string;
   address: string;
   contact_number: string;
+  status: string;
+  admit_to_department: string;
+  admit_to_location: string;
+  admitting_diagnosis: string;
+  attending_physician_id: string | null;
+  allergies: string[] | null;
+  current_medications: string[] | null;
+  problem_list: string[] | null;
+  philhealth: boolean;
 }
 
 interface PhysicalAssessment {
@@ -41,8 +63,16 @@ const PatientRecord = () => {
   const navigate = useNavigate();
   const [patient, setPatient] = useState<Patient | null>(null);
   const [physicalAssessments, setPhysicalAssessments] = useState<PhysicalAssessment[]>([]);
+  const [vitalSigns, setVitalSigns] = useState<any[]>([]);
+  const [medications, setMedications] = useState<any[]>([]);
+  const [labs, setLabs] = useState<any[]>([]);
+  const [imaging, setImaging] = useState<any[]>([]);
+  const [doctors, setDoctors] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAssessmentDialog, setShowAssessmentDialog] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showAssignDialog, setShowAssignDialog] = useState(false);
+  const [selectedDoctorId, setSelectedDoctorId] = useState("");
   const [assessmentForm, setAssessmentForm] = useState({
     // Skin Assessment
     skinColor: "",
@@ -124,15 +154,26 @@ const PatientRecord = () => {
       if (patientError) throw patientError;
       setPatient(patientData);
 
-      // Fetch physical assessments
-      const { data: assessmentsData, error: assessmentsError } = await supabase
-        .from("physical_assessments")
-        .select("*")
-        .eq("patient_id", id)
-        .order("assessment_date", { ascending: false });
+      // Fetch all related data
+      const [assessments, vitals, meds, labsData, imagingData, doctorsData] = await Promise.all([
+        supabase.from("physical_assessments").select("*").eq("patient_id", id).order("assessment_date", { ascending: false }),
+        supabase.from("patient_vital_signs").select("*").eq("patient_id", id).order("recorded_at", { ascending: false }).limit(5),
+        supabase.from("patient_medications").select("*").eq("patient_id", id).order("start_date", { ascending: false }),
+        supabase.from("patient_labs").select("*").eq("patient_id", id).order("test_date", { ascending: false }).limit(5),
+        supabase.from("patient_imaging").select("*").eq("patient_id", id).order("imaging_date", { ascending: false }).limit(5),
+        supabase.from("doctors").select("*").order("name", { ascending: true })
+      ]);
 
-      if (assessmentsError) throw assessmentsError;
-      setPhysicalAssessments(assessmentsData || []);
+      setPhysicalAssessments(assessments.data || []);
+      setVitalSigns(vitals.data || []);
+      setMedications(meds.data || []);
+      setLabs(labsData.data || []);
+      setImaging(imagingData.data || []);
+      setDoctors(doctorsData.data || []);
+      
+      if (patientData.attending_physician_id) {
+        setSelectedDoctorId(patientData.attending_physician_id);
+      }
     } catch (error: any) {
       toast.error("Error loading patient data: " + error.message);
     } finally {
@@ -228,6 +269,7 @@ const PatientRecord = () => {
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-4">
         <div className="flex items-center gap-4">
           <Button variant="outline" size="icon" onClick={() => navigate("/dashboard/patients")}>
             <ArrowLeft className="h-4 w-4" />
@@ -235,16 +277,127 @@ const PatientRecord = () => {
           <div>
             <h1 className="text-3xl font-bold text-primary">{patient.name}</h1>
             <p className="text-muted-foreground">Hospital No: {patient.hospital_number}</p>
+            <Badge variant={patient.status === "active" ? "default" : "secondary"} className="mt-2">
+              {patient.status}
+            </Badge>
           </div>
         </div>
         
-        <Dialog open={showAssessmentDialog} onOpenChange={setShowAssessmentDialog}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="h-4 w-4 mr-2" />
-              Add Physical Assessment
+        <div className="flex gap-2 flex-wrap">
+          <Dialog open={showAssignDialog} onOpenChange={setShowAssignDialog}>
+            <DialogTrigger asChild>
+              <Button variant="outline">
+                <UserPlus className="h-4 w-4 mr-2" />
+                Assign Doctor
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Assign Attending Physician</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Select Doctor</Label>
+                  <Select value={selectedDoctorId} onValueChange={setSelectedDoctorId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Choose a doctor" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {doctors.map((doctor) => (
+                        <SelectItem key={doctor.id} value={doctor.id}>
+                          {doctor.name} - {doctor.specialty}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button
+                  onClick={async () => {
+                    try {
+                      const { error } = await supabase
+                        .from("patients")
+                        .update({ attending_physician_id: selectedDoctorId })
+                        .eq("id", id);
+                      if (error) throw error;
+                      toast.success("Doctor assigned successfully");
+                      setShowAssignDialog(false);
+                      fetchPatientData();
+                    } catch (error: any) {
+                      toast.error("Error assigning doctor: " + error.message);
+                    }
+                  }}
+                  className="w-full"
+                >
+                  Assign Doctor
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          {patient.status === "archived" && (
+            <Button
+              variant="outline"
+              onClick={async () => {
+                try {
+                  const { error } = await supabase
+                    .from("patients")
+                    .update({ status: "active" })
+                    .eq("id", id);
+                  if (error) throw error;
+                  toast.success("Patient unarchived");
+                  fetchPatientData();
+                } catch (error: any) {
+                  toast.error("Error: " + error.message);
+                }
+              }}
+            >
+              <ArchiveRestore className="h-4 w-4 mr-2" />
+              Unarchive
             </Button>
-          </DialogTrigger>
+          )}
+
+          {patient.status === "active" && (
+            <Button
+              variant="outline"
+              onClick={async () => {
+                try {
+                  const { error } = await supabase
+                    .from("patients")
+                    .update({ status: "archived" })
+                    .eq("id", id);
+                  if (error) throw error;
+                  toast.success("Patient archived");
+                  fetchPatientData();
+                } catch (error: any) {
+                  toast.error("Error: " + error.message);
+                }
+              }}
+            >
+              <Archive className="h-4 w-4 mr-2" />
+              Archive
+            </Button>
+          )}
+
+          <Button variant="outline">
+            <Edit className="h-4 w-4 mr-2" />
+            Edit
+          </Button>
+
+          <Button
+            variant="destructive"
+            onClick={() => setShowDeleteDialog(true)}
+          >
+            <Trash2 className="h-4 w-4 mr-2" />
+            Delete
+          </Button>
+
+          <Dialog open={showAssessmentDialog} onOpenChange={setShowAssessmentDialog}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="h-4 w-4 mr-2" />
+                Add Physical Assessment
+              </Button>
+            </DialogTrigger>
           <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>New Physical Assessment</DialogTitle>
@@ -682,35 +835,214 @@ const PatientRecord = () => {
         </TabsList>
 
         <TabsContent value="overview">
-          <Card>
-            <CardHeader>
-              <CardTitle>Patient Information</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-sm text-muted-foreground">Age</p>
-                  <p className="font-medium">{patient.age} years</p>
+          <div className="grid gap-6">
+            {/* Demographics */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Demographics</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Age</p>
+                    <p className="font-medium">{patient.age} years</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Sex</p>
+                    <p className="font-medium">{patient.sex}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Date of Birth</p>
+                    <p className="font-medium">{format(new Date(patient.date_of_birth), "MMM d, yyyy")}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Contact</p>
+                    <p className="font-medium">{patient.contact_number || "N/A"}</p>
+                  </div>
+                  <div className="col-span-2">
+                    <p className="text-sm text-muted-foreground">Address</p>
+                    <p className="font-medium">{patient.address || "N/A"}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Department</p>
+                    <p className="font-medium">{patient.admit_to_department || "N/A"}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Location</p>
+                    <p className="font-medium">{patient.admit_to_location || "N/A"}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">PhilHealth</p>
+                    <Badge variant={patient.philhealth ? "default" : "secondary"}>
+                      {patient.philhealth ? "Yes" : "No"}
+                    </Badge>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Sex</p>
-                  <p className="font-medium">{patient.sex}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Date of Birth</p>
-                  <p className="font-medium">{new Date(patient.date_of_birth).toLocaleDateString()}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Contact</p>
-                  <p className="font-medium">{patient.contact_number}</p>
-                </div>
-                <div className="col-span-2">
-                  <p className="text-sm text-muted-foreground">Address</p>
-                  <p className="font-medium">{patient.address}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+
+            {/* Diagnosis & Allergies */}
+            <div className="grid md:grid-cols-2 gap-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Diagnosis</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <p className="text-sm">{patient.admitting_diagnosis || "No diagnosis recorded"}</p>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Allergies</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {patient.allergies && patient.allergies.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {patient.allergies.map((allergy, idx) => (
+                        <Badge key={idx} variant="destructive">{allergy}</Badge>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No allergies recorded</p>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Current Medications */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Current Medications</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {medications.length > 0 ? (
+                  <div className="space-y-2">
+                    {medications.slice(0, 5).map((med) => (
+                      <div key={med.id} className="flex justify-between items-start border-b pb-2">
+                        <div>
+                          <p className="font-medium">{med.medication_name}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {med.dosage} - {med.frequency} - {med.route}
+                          </p>
+                        </div>
+                        <Badge variant="outline">{format(new Date(med.start_date), "MMM d")}</Badge>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No medications recorded</p>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Vital Signs */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Recent Vital Signs</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {vitalSigns.length > 0 ? (
+                  <div className="space-y-3">
+                    {vitalSigns.map((vital) => (
+                      <div key={vital.id} className="border-b pb-3">
+                        <p className="text-sm text-muted-foreground mb-2">
+                          {format(new Date(vital.recorded_at), "PPp")}
+                        </p>
+                        <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
+                          {vital.blood_pressure && (
+                            <div>
+                              <p className="text-xs text-muted-foreground">BP</p>
+                              <p className="text-sm font-medium">{vital.blood_pressure}</p>
+                            </div>
+                          )}
+                          {vital.heart_rate && (
+                            <div>
+                              <p className="text-xs text-muted-foreground">HR</p>
+                              <p className="text-sm font-medium">{vital.heart_rate} bpm</p>
+                            </div>
+                          )}
+                          {vital.respiratory_rate && (
+                            <div>
+                              <p className="text-xs text-muted-foreground">RR</p>
+                              <p className="text-sm font-medium">{vital.respiratory_rate}</p>
+                            </div>
+                          )}
+                          {vital.temperature && (
+                            <div>
+                              <p className="text-xs text-muted-foreground">Temp</p>
+                              <p className="text-sm font-medium">{vital.temperature}°C</p>
+                            </div>
+                          )}
+                          {vital.oxygen_saturation && (
+                            <div>
+                              <p className="text-xs text-muted-foreground">SpO2</p>
+                              <p className="text-sm font-medium">{vital.oxygen_saturation}%</p>
+                            </div>
+                          )}
+                          {vital.pain_scale && (
+                            <div>
+                              <p className="text-xs text-muted-foreground">Pain</p>
+                              <p className="text-sm font-medium">{vital.pain_scale}/10</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No vital signs recorded</p>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Lab Results & Imaging */}
+            <div className="grid md:grid-cols-2 gap-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Recent Lab Results</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {labs.length > 0 ? (
+                    <div className="space-y-2">
+                      {labs.map((lab) => (
+                        <div key={lab.id} className="border-b pb-2">
+                          <p className="font-medium text-sm">{lab.test_name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {format(new Date(lab.test_date), "MMM d, yyyy")}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No lab results</p>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Recent Imaging</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {imaging.length > 0 ? (
+                    <div className="space-y-2">
+                      {imaging.map((img) => (
+                        <div key={img.id} className="border-b pb-2">
+                          <p className="font-medium text-sm">{img.imaging_type}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {format(new Date(img.imaging_date), "MMM d, yyyy")}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No imaging results</p>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </div>
         </TabsContent>
 
         <TabsContent value="assessments">
@@ -722,19 +1054,65 @@ const PatientRecord = () => {
                 </CardContent>
               </Card>
             ) : (
-              physicalAssessments.map((assessment) => (
-                <Card key={assessment.id}>
-                  <CardHeader>
-                    <CardTitle className="text-lg">
-                      Assessment - {new Date(assessment.assessment_date).toLocaleString()}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <p className="font-semibold text-sm text-primary">Skin</p>
-                        <p className="text-sm">{JSON.stringify(assessment.skin_assessment)}</p>
+              physicalAssessments.map((assessment) => {
+                const formatAssessmentData = (data: any) => {
+                  if (!data) return "No data";
+                  const entries = Object.entries(data).filter(([key, value]) => value);
+                  if (entries.length === 0) return "No data";
+                  return entries.map(([key, value]) => (
+                    <div key={key} className="mb-1">
+                      <span className="font-medium capitalize">{key.replace(/_/g, ' ')}: </span>
+                      <span>{typeof value === 'boolean' ? (value ? 'Yes' : 'No') : value}</span>
+                    </div>
+                  ));
+                };
+
+                return (
+                  <Card key={assessment.id}>
+                    <CardHeader>
+                      <CardTitle className="text-lg">
+                        Assessment - {format(new Date(assessment.assessment_date), "PPp")}
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-1">
+                          <p className="font-semibold text-sm text-primary mb-2">Skin Assessment</p>
+                          {formatAssessmentData(assessment.skin_assessment)}
+                        </div>
+                        <div className="space-y-1">
+                          <p className="font-semibold text-sm text-primary mb-2">EENT Assessment</p>
+                          {formatAssessmentData(assessment.eent_assessment)}
+                        </div>
+                        <div className="space-y-1">
+                          <p className="font-semibold text-sm text-primary mb-2">Cardiovascular</p>
+                          {formatAssessmentData(assessment.cardiovascular_assessment)}
+                        </div>
+                        <div className="space-y-1">
+                          <p className="font-semibold text-sm text-primary mb-2">Respiratory</p>
+                          {formatAssessmentData(assessment.respiratory_assessment)}
+                        </div>
+                        <div className="space-y-1">
+                          <p className="font-semibold text-sm text-primary mb-2">Gastrointestinal</p>
+                          {formatAssessmentData(assessment.gastrointestinal_assessment)}
+                        </div>
+                        <div className="space-y-1">
+                          <p className="font-semibold text-sm text-primary mb-2">Genitourinary</p>
+                          {formatAssessmentData(assessment.genitourinary_assessment)}
+                        </div>
+                        <div className="space-y-1">
+                          <p className="font-semibold text-sm text-primary mb-2">Musculoskeletal</p>
+                          {formatAssessmentData(assessment.musculoskeletal_assessment)}
+                        </div>
+                        <div className="space-y-1">
+                          <p className="font-semibold text-sm text-primary mb-2">Neurological</p>
+                          {formatAssessmentData(assessment.neurological_assessment)}
+                        </div>
                       </div>
+                    </CardContent>
+                  </Card>
+                );
+              })
                       <div>
                         <p className="font-semibold text-sm text-primary">EENT</p>
                         <p className="text-sm">{JSON.stringify(assessment.eent_assessment)}</p>
@@ -771,6 +1149,40 @@ const PatientRecord = () => {
           </div>
         </TabsContent>
       </Tabs>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the patient record
+              and all associated data including assessments, medications, and lab results.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async () => {
+                try {
+                  const { error } = await supabase
+                    .from("patients")
+                    .delete()
+                    .eq("id", id);
+                  if (error) throw error;
+                  toast.success("Patient deleted successfully");
+                  navigate("/dashboard/patients");
+                } catch (error: any) {
+                  toast.error("Error deleting patient: " + error.message);
+                }
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

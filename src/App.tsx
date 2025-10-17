@@ -12,6 +12,9 @@ import Nurses from "./pages/dashboard/Nurses";
 import Patients from "./pages/dashboard/Patients";
 import AddPatient from "./pages/dashboard/AddPatient";
 import PatientRecord from "./pages/dashboard/PatientRecord";
+import Settings from "./pages/dashboard/Settings";
+import Messages from "./pages/dashboard/Messages";
+import HelpSupport from "./pages/dashboard/HelpSupport";
 import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./components/ProtectedRoute";
 
@@ -33,6 +36,9 @@ const App = () => (
             <Route path="patients" element={<Patients />} />
             <Route path="patients/:id" element={<PatientRecord />} />
             <Route path="add-patient" element={<AddPatient />} />
+            <Route path="settings" element={<Settings />} />
+            <Route path="messages" element={<Messages />} />
+            <Route path="help" element={<HelpSupport />} />
           </Route>
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
