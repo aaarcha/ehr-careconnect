@@ -53,35 +53,40 @@ export function AppSidebar() {
       { title: "Dashboard", url: "/dashboard", icon: Home },
     ];
 
-    if (userRole === "medtech") {
+    // Only show role-specific items when role is explicitly confirmed
+    if (userRole === 'staff') {
+      return [
+        ...baseItems,
+        { title: "Decking", url: "/dashboard/decking", icon: Users },
+        { title: "Nurses", url: "/dashboard/nurses", icon: UserCog },
+        { title: "Patient Records", url: "/dashboard/patients", icon: FileText },
+        { title: "Add Patient", url: "/dashboard/add-patient", icon: FilePlus },
+      ];
+    }
+
+    if (userRole === 'medtech') {
       return [
         ...baseItems,
         { title: "Labs", url: "/dashboard/labs", icon: TestTube },
       ];
     }
 
-    if (userRole === "radtech") {
+    if (userRole === 'radtech') {
       return [
         ...baseItems,
         { title: "Imaging", url: "/dashboard/imaging", icon: Scan },
       ];
     }
 
-    if (userRole === "patient") {
+    if (userRole === 'patient') {
       return [
         ...baseItems,
         { title: "My Records", url: "/dashboard/my-records", icon: FileText },
       ];
     }
 
-    // Staff gets full access
-    return [
-      ...baseItems,
-      { title: "Decking", url: "/dashboard/decking", icon: Users },
-      { title: "Nurses", url: "/dashboard/nurses", icon: UserCog },
-      { title: "Patient Records", url: "/dashboard/patients", icon: FileText },
-      { title: "Add Patient", url: "/dashboard/add-patient", icon: FilePlus },
-    ];
+    // Default: only Dashboard when role is unknown/null
+    return baseItems;
   };
 
   const navItems = getNavItems();

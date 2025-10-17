@@ -93,8 +93,7 @@ const Patients = () => {
   };
 
   const handleViewPatient = (patient: Patient) => {
-    setSelectedPatient(patient);
-    setDetailsOpen(true);
+    navigate(`/dashboard/patients/${patient.id}`);
   };
 
   const filterPatients = (patients: Patient[]) => {
