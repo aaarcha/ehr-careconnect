@@ -1112,39 +1112,13 @@ const PatientRecord = () => {
                     </CardContent>
                   </Card>
                 );
-              })
-                      <div>
-                        <p className="font-semibold text-sm text-primary">EENT</p>
-                        <p className="text-sm">{JSON.stringify(assessment.eent_assessment)}</p>
-                      </div>
-                      <div>
-                        <p className="font-semibold text-sm text-primary">Cardiovascular</p>
-                        <p className="text-sm">{JSON.stringify(assessment.cardiovascular_assessment)}</p>
-                      </div>
-                      <div>
-                        <p className="font-semibold text-sm text-primary">Respiratory</p>
-                        <p className="text-sm">{JSON.stringify(assessment.respiratory_assessment)}</p>
-                      </div>
-                      <div>
-                        <p className="font-semibold text-sm text-primary">Gastrointestinal</p>
-                        <p className="text-sm">{JSON.stringify(assessment.gastrointestinal_assessment)}</p>
-                      </div>
-                      <div>
-                        <p className="font-semibold text-sm text-primary">Genitourinary</p>
-                        <p className="text-sm">{JSON.stringify(assessment.genitourinary_assessment)}</p>
-                      </div>
-                      <div>
-                        <p className="font-semibold text-sm text-primary">Musculoskeletal</p>
-                        <p className="text-sm">{JSON.stringify(assessment.musculoskeletal_assessment)}</p>
-                      </div>
-                      <div>
-                        <p className="font-semibold text-sm text-primary">Neurological</p>
-                        <p className="text-sm">{JSON.stringify(assessment.neurological_assessment)}</p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))
+              })}
+            </div>
+          ) : (
+            <div className="text-center py-8 text-muted-foreground">
+              No physical assessments recorded yet
+            </div>
+          )}
             )}
           </div>
         </TabsContent>
