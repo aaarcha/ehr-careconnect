@@ -268,7 +268,6 @@ const PatientRecord = () => {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between">
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div className="flex items-center gap-4">
           <Button variant="outline" size="icon" onClick={() => navigate("/dashboard/patients")}>
@@ -827,6 +826,7 @@ const PatientRecord = () => {
           </DialogContent>
         </Dialog>
       </div>
+      </div>
 
       <Tabs defaultValue="overview" className="space-y-4">
         <TabsList>
@@ -1062,7 +1062,7 @@ const PatientRecord = () => {
                   return entries.map(([key, value]) => (
                     <div key={key} className="mb-1">
                       <span className="font-medium capitalize">{key.replace(/_/g, ' ')}: </span>
-                      <span>{typeof value === 'boolean' ? (value ? 'Yes' : 'No') : value}</span>
+                      <span>{typeof value === 'boolean' ? (value ? 'Yes' : 'No') : String(value)}</span>
                     </div>
                   ));
                 };
@@ -1112,13 +1112,7 @@ const PatientRecord = () => {
                     </CardContent>
                   </Card>
                 );
-              })}
-            </div>
-          ) : (
-            <div className="text-center py-8 text-muted-foreground">
-              No physical assessments recorded yet
-            </div>
-          )}
+              })
             )}
           </div>
         </TabsContent>

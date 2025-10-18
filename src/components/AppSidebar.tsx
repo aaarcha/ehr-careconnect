@@ -1,4 +1,4 @@
-import { Home, Users, UserCog, FileText, FilePlus, Menu, Activity, TestTube, Scan, Settings, MessageSquare, HelpCircle } from "lucide-react";
+import { Home, Users, UserCog, FileText, FilePlus, Menu, Activity, TestTube, Scan, Settings, MessageSquare, HelpCircle, UserCheck } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -59,6 +59,8 @@ export function AppSidebar() {
         ...baseItems,
         { title: "Decking", url: "/dashboard/decking", icon: Users },
         { title: "Nurses", url: "/dashboard/nurses", icon: UserCog },
+        { title: "MedTechs", url: "/dashboard/medtechs", icon: TestTube },
+        { title: "RadTechs", url: "/dashboard/radtechs", icon: Scan },
         { title: "Patient Records", url: "/dashboard/patients", icon: FileText },
         { title: "Add Patient", url: "/dashboard/add-patient", icon: FilePlus },
         { title: "Messages", url: "/dashboard/messages", icon: MessageSquare },
