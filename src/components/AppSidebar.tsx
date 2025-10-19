@@ -59,8 +59,8 @@ export function AppSidebar() {
         ...baseItems,
         { title: "Decking", url: "/dashboard/decking", icon: Users },
         { title: "Nurses", url: "/dashboard/nurses", icon: UserCog },
-        { title: "MedTechs", url: "/dashboard/medtechs", icon: TestTube },
-        { title: "RadTechs", url: "/dashboard/radtechs", icon: Scan },
+        { title: "Laboratory", url: "/dashboard/laboratory", icon: TestTube },
+        { title: "Imaging", url: "/dashboard/imaging", icon: Scan },
         { title: "Patient Records", url: "/dashboard/patients", icon: FileText },
         { title: "Add Patient", url: "/dashboard/add-patient", icon: FilePlus },
         { title: "Messages", url: "/dashboard/messages", icon: MessageSquare },
@@ -72,7 +72,7 @@ export function AppSidebar() {
     if (userRole === 'medtech') {
       return [
         ...baseItems,
-        { title: "Labs", url: "/dashboard/labs", icon: TestTube },
+        { title: "Laboratory", url: "/dashboard/laboratory", icon: TestTube },
         { title: "Messages", url: "/dashboard/messages", icon: MessageSquare },
         { title: "Settings", url: "/dashboard/settings", icon: Settings },
         { title: "Help", url: "/dashboard/help", icon: HelpCircle },

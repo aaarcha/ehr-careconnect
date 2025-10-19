@@ -34,39 +34,47 @@ const Auth = () => {
 
     try {
       if (role === "patient") {
-        // For patients, authenticate first then validate
-        const patientEmail = `patient_${patientNumber.trim()}@careconnect.com`.toLowerCase();
-        
-        const { data: authData, error: signInError } = await supabase.auth.signInWithPassword({
-          email: patientEmail,
-          password: "patient123",
-        });
+        // For patients, check if patient_number exists in patients table
+        const { data: patientData, error: patientError } = await supabase
+          .from("patients")
+          .select("id, patient_number, hospital_number")
+          .eq("patient_number", patientNumber.trim())
+          .maybeSingle();
 
-        if (signInError) {
-          if (signInError.message.includes("Invalid login credentials")) {
-            toast.error("Invalid patient number or credentials");
-          } else {
-            toast.error(signInError.message);
-          }
-          setLoading(false);
-          return;
-        }
-
-        // Now validate the role after successful authentication
-        const { data: roleData, error: roleError } = await supabase
-          .from("user_roles")
-          .select("role, patient_number")
-          .eq("user_id", authData.session.user.id)
-          .single();
-
-        if (roleError || !roleData || roleData.role !== "patient" || roleData.patient_number !== patientNumber.trim()) {
-          await supabase.auth.signOut();
+        if (patientError || !patientData) {
           toast.error("Invalid patient number");
           setLoading(false);
           return;
         }
+
+        // Find the user_id associated with this patient number
+        const { data: roleData, error: roleError } = await supabase
+          .from("user_roles")
+          .select("user_id")
+          .eq("patient_number", patientNumber.trim())
+          .eq("role", "patient")
+          .maybeSingle();
+
+        if (roleError || !roleData) {
+          toast.error("Patient account not found");
+          setLoading(false);
+          return;
+        }
+
+        // Sign in with the patient email (no password required - auto-generated password)
+        const patientEmail = `patient_${patientNumber.trim()}@careconnect.com`.toLowerCase();
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email: patientEmail,
+          password: `patient_${patientNumber.trim()}_secure`,
+        });
+
+        if (signInError) {
+          toast.error("Authentication failed");
+          setLoading(false);
+          return;
+        }
       } else {
-        // For staff, medtech, radtech - authenticate first then validate
+        // For staff, medtech, radtech - authenticate with account number and password
         const email = `${accountNumber.trim()}@careconnect.com`.toLowerCase();
         
         const { data: authData, error: signInError } = await supabase.auth.signInWithPassword({
@@ -86,7 +94,7 @@ const Auth = () => {
           return;
         }
 
-        // Now validate the role after successful authentication
+        // Validate the role after successful authentication
         const { data: roleData, error: roleError } = await supabase
           .from("user_roles")
           .select("role, account_number")

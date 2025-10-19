@@ -9,8 +9,8 @@ import Dashboard from "./pages/Dashboard";
 import Home from "./pages/dashboard/Home";
 import Decking from "./pages/dashboard/Decking";
 import Nurses from "./pages/dashboard/Nurses";
-import MedTechs from "./pages/dashboard/MedTechs";
-import RadTechs from "./pages/dashboard/RadTechs";
+import Laboratory from "./pages/dashboard/Laboratory";
+import Imaging from "./pages/dashboard/Imaging";
 import Patients from "./pages/dashboard/Patients";
 import AddPatient from "./pages/dashboard/AddPatient";
 import PatientRecord from "./pages/dashboard/PatientRecord";
@@ -35,8 +35,8 @@ const App = () => (
             <Route index element={<Home />} />
             <Route path="decking" element={<Decking />} />
             <Route path="nurses" element={<Nurses />} />
-            <Route path="medtechs" element={<MedTechs />} />
-            <Route path="radtechs" element={<RadTechs />} />
+            <Route path="laboratory" element={<Laboratory />} />
+            <Route path="imaging" element={<Imaging />} />
             <Route path="patients" element={<Patients />} />
             <Route path="patients/:id" element={<PatientRecord />} />
             <Route path="add-patient" element={<AddPatient />} />

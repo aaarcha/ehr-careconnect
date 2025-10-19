@@ -24,6 +24,7 @@ const AddPatient = () => {
   
   // Demographics
   const [hospitalNumber, setHospitalNumber] = useState("");
+  const [patientNumber, setPatientNumber] = useState("");
   const [name, setName] = useState("");
   const [sex, setSex] = useState("");
   const [height, setHeight] = useState("");
@@ -105,10 +106,10 @@ const AddPatient = () => {
   };
 
   const handleSubmit = async () => {
-    if (!hospitalNumber || !name || !sex || !dateOfBirth) {
+    if (!hospitalNumber || !patientNumber || !name || !sex || !dateOfBirth) {
       toast({
         title: "Missing Required Fields",
-        description: "Please fill in all required fields: Hospital Number, Name, Sex, and Date of Birth",
+        description: "Please fill in all required fields: Hospital Number, Patient Number, Name, Sex, and Date of Birth",
         variant: "destructive",
       });
       return;
@@ -123,6 +124,7 @@ const AddPatient = () => {
         .from("patients")
         .insert([{
           hospital_number: hospitalNumber,
+          patient_number: patientNumber,
           name,
           sex,
           date_of_birth: format(dateOfBirth, "yyyy-MM-dd"),
@@ -216,6 +218,16 @@ const AddPatient = () => {
                     value={hospitalNumber}
                     onChange={(e) => setHospitalNumber(e.target.value)}
                     placeholder="e.g., H2025001"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="patientNumber">Patient Number (Login ID) *</Label>
+                  <Input
+                    id="patientNumber"
+                    value={patientNumber}
+                    onChange={(e) => setPatientNumber(e.target.value)}
+                    placeholder="e.g., P2025001"
                   />
                 </div>
                 

@@ -247,28 +247,37 @@ export type Database = {
       }
       patient_imaging: {
         Row: {
+          category: string | null
           findings: string | null
           id: string
+          image_url: string | null
           imaging_date: string | null
           imaging_type: string
           notes: string | null
           patient_id: string
+          performed_by: string | null
         }
         Insert: {
+          category?: string | null
           findings?: string | null
           id?: string
+          image_url?: string | null
           imaging_date?: string | null
           imaging_type: string
           notes?: string | null
           patient_id: string
+          performed_by?: string | null
         }
         Update: {
+          category?: string | null
           findings?: string | null
           id?: string
+          image_url?: string | null
           imaging_date?: string | null
           imaging_type?: string
           notes?: string | null
           patient_id?: string
+          performed_by?: string | null
         }
         Relationships: [
           {
@@ -278,32 +287,57 @@ export type Database = {
             referencedRelation: "patients"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "patient_imaging_performed_by_fkey"
+            columns: ["performed_by"]
+            isOneToOne: false
+            referencedRelation: "radtechs"
+            referencedColumns: ["id"]
+          },
         ]
       }
       patient_labs: {
         Row: {
+          flag: string | null
           id: string
+          normal_range: string | null
           notes: string | null
           patient_id: string
+          performed_by: string | null
+          result_value: number | null
           results: string | null
+          test_category: string | null
           test_date: string | null
           test_name: string
+          unit: string | null
         }
         Insert: {
+          flag?: string | null
           id?: string
+          normal_range?: string | null
           notes?: string | null
           patient_id: string
+          performed_by?: string | null
+          result_value?: number | null
           results?: string | null
+          test_category?: string | null
           test_date?: string | null
           test_name: string
+          unit?: string | null
         }
         Update: {
+          flag?: string | null
           id?: string
+          normal_range?: string | null
           notes?: string | null
           patient_id?: string
+          performed_by?: string | null
+          result_value?: number | null
           results?: string | null
+          test_category?: string | null
           test_date?: string | null
           test_name?: string
+          unit?: string | null
         }
         Relationships: [
           {
@@ -311,6 +345,13 @@ export type Database = {
             columns: ["patient_id"]
             isOneToOne: false
             referencedRelation: "patients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "patient_labs_performed_by_fkey"
+            columns: ["performed_by"]
+            isOneToOne: false
+            referencedRelation: "medtechs"
             referencedColumns: ["id"]
           },
         ]
@@ -433,6 +474,7 @@ export type Database = {
           nationality: string | null
           occupation: string | null
           past_medical_history: Json | null
+          patient_number: string | null
           personal_social_history: Json | null
           philhealth: boolean | null
           place_of_birth: string | null
@@ -472,6 +514,7 @@ export type Database = {
           nationality?: string | null
           occupation?: string | null
           past_medical_history?: Json | null
+          patient_number?: string | null
           personal_social_history?: Json | null
           philhealth?: boolean | null
           place_of_birth?: string | null
@@ -511,6 +554,7 @@ export type Database = {
           nationality?: string | null
           occupation?: string | null
           past_medical_history?: Json | null
+          patient_number?: string | null
           personal_social_history?: Json | null
           philhealth?: boolean | null
           place_of_birth?: string | null

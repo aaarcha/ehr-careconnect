@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { UserPlus, Stethoscope } from "lucide-react";
+import { UserPlus, Stethoscope, Edit, Trash2 } from "lucide-react";
 
 interface Doctor {
   id: string;
@@ -53,6 +53,8 @@ const Decking = () => {
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [userRole, setUserRole] = useState<string | null>(null);
+  
+  const [editingDoctor, setEditingDoctor] = useState<Doctor | null>(null);
   
   // Form state
   const [name, setName] = useState("");
@@ -112,26 +114,75 @@ const Decking = () => {
     }
 
     try {
+      if (editingDoctor) {
+        const { error } = await supabase
+          .from("doctors")
+          .update({ name, specialty: specialty as any })
+          .eq("id", editingDoctor.id);
+
+        if (error) throw error;
+
+        toast({
+          title: "Doctor Updated",
+          description: `Dr. ${name} has been updated.`,
+        });
+      } else {
+        const { error } = await supabase
+          .from("doctors")
+          .insert([{ name, specialty: specialty as any }]);
+
+        if (error) throw error;
+
+        toast({
+          title: "Doctor Added",
+          description: `Dr. ${name} has been added to the directory.`,
+        });
+      }
+
+      setName("");
+      setSpecialty("");
+      setEditingDoctor(null);
+      setDialogOpen(false);
+      fetchDoctors();
+    } catch (error: any) {
+      console.error("Error saving doctor:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to save doctor",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleEditDoctor = (doctor: Doctor) => {
+    setEditingDoctor(doctor);
+    setName(doctor.name);
+    setSpecialty(doctor.specialty);
+    setDialogOpen(true);
+  };
+
+  const handleDeleteDoctor = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this doctor?")) return;
+
+    try {
       const { error } = await supabase
         .from("doctors")
-        .insert([{ name, specialty: specialty as any }]);
+        .delete()
+        .eq("id", id);
 
       if (error) throw error;
 
       toast({
-        title: "Doctor Added",
-        description: `Dr. ${name} has been added to the directory.`,
+        title: "Doctor Deleted",
+        description: "Doctor has been removed from the directory.",
       });
 
-      setName("");
-      setSpecialty("");
-      setDialogOpen(false);
       fetchDoctors();
     } catch (error: any) {
-      console.error("Error adding doctor:", error);
+      console.error("Error deleting doctor:", error);
       toast({
         title: "Error",
-        description: error.message || "Failed to add doctor",
+        description: "Failed to delete doctor",
         variant: "destructive",
       });
     }
@@ -156,7 +207,7 @@ const Decking = () => {
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Add New Doctor</DialogTitle>
+                <DialogTitle>{editingDoctor ? "Edit" : "Add New"} Doctor</DialogTitle>
               </DialogHeader>
               <div className="space-y-4 pt-4">
                 <div className="space-y-2">
@@ -187,7 +238,7 @@ const Decking = () => {
                   <Button variant="outline" onClick={() => setDialogOpen(false)}>
                     Cancel
                   </Button>
-                  <Button onClick={handleAddDoctor}>Add Doctor</Button>
+                  <Button onClick={handleAddDoctor}>{editingDoctor ? "Update" : "Add"} Doctor</Button>
                 </div>
               </div>
             </DialogContent>
@@ -215,6 +266,7 @@ const Decking = () => {
                 <TableRow>
                   <TableHead>Doctor Name</TableHead>
                   <TableHead>Specialty</TableHead>
+                  {canManageDoctors && <TableHead className="text-right">Actions</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -222,6 +274,18 @@ const Decking = () => {
                   <TableRow key={doctor.id}>
                     <TableCell className="font-medium">{doctor.name}</TableCell>
                     <TableCell>{doctor.specialty}</TableCell>
+                    {canManageDoctors && (
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button size="sm" variant="ghost" onClick={() => handleEditDoctor(doctor)}>
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => handleDeleteDoctor(doctor.id)}>
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>

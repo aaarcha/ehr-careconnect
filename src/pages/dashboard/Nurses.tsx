@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { HeartPulse, Plus } from "lucide-react";
+import { HeartPulse, Plus, Edit, Trash2 } from "lucide-react";
 
 interface Nurse {
   id: string;
@@ -23,6 +23,7 @@ const Nurses = () => {
   const [nurses, setNurses] = useState<Nurse[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddDialog, setShowAddDialog] = useState(false);
+  const [editingNurse, setEditingNurse] = useState<Nurse | null>(null);
   const [newNurse, setNewNurse] = useState<{
     name: string;
     nurse_no: string;
@@ -69,27 +70,83 @@ const Nurses = () => {
     }
 
     try {
-      const { error } = await supabase.from("nurses").insert([{
-        name: newNurse.name,
-        nurse_no: newNurse.nurse_no,
-        department: newNurse.department as any
-      }]);
+      if (editingNurse) {
+        const { error } = await supabase
+          .from("nurses")
+          .update({
+            name: newNurse.name,
+            nurse_no: newNurse.nurse_no,
+            department: newNurse.department as any
+          })
+          .eq("id", editingNurse.id);
+
+        if (error) throw error;
+
+        toast({
+          title: "Success",
+          description: "Nurse updated successfully",
+        });
+      } else {
+        const { error } = await supabase.from("nurses").insert([{
+          name: newNurse.name,
+          nurse_no: newNurse.nurse_no,
+          department: newNurse.department as any
+        }]);
+
+        if (error) throw error;
+
+        toast({
+          title: "Success",
+          description: "Nurse added successfully",
+        });
+      }
+
+      setShowAddDialog(false);
+      setEditingNurse(null);
+      setNewNurse({ name: "", nurse_no: "", department: "" });
+      fetchNurses();
+    } catch (error: any) {
+      console.error("Error saving nurse:", error);
+      toast({
+        title: "Error",
+        description: "Failed to save nurse",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleEditNurse = (nurse: Nurse) => {
+    setEditingNurse(nurse);
+    setNewNurse({
+      name: nurse.name,
+      nurse_no: nurse.nurse_no,
+      department: nurse.department as any
+    });
+    setShowAddDialog(true);
+  };
+
+  const handleDeleteNurse = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this nurse?")) return;
+
+    try {
+      const { error } = await supabase
+        .from("nurses")
+        .delete()
+        .eq("id", id);
 
       if (error) throw error;
 
       toast({
         title: "Success",
-        description: "Nurse added successfully",
+        description: "Nurse deleted successfully",
       });
 
-      setShowAddDialog(false);
-      setNewNurse({ name: "", nurse_no: "", department: "" });
       fetchNurses();
     } catch (error: any) {
-      console.error("Error adding nurse:", error);
+      console.error("Error deleting nurse:", error);
       toast({
         title: "Error",
-        description: "Failed to add nurse",
+        description: "Failed to delete nurse",
         variant: "destructive",
       });
     }
@@ -123,6 +180,7 @@ const Nurses = () => {
                 <TableRow>
                   <TableHead>Name</TableHead>
                   <TableHead>Nurse No.</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -130,6 +188,16 @@ const Nurses = () => {
                   <TableRow key={nurse.id}>
                     <TableCell className="font-medium">{nurse.name}</TableCell>
                     <TableCell>{nurse.nurse_no}</TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-2">
+                        <Button size="sm" variant="ghost" onClick={() => handleEditNurse(nurse)}>
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => handleDeleteNurse(nurse.id)}>
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </div>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -156,7 +224,7 @@ const Nurses = () => {
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Add New Nurse</DialogTitle>
+              <DialogTitle>{editingNurse ? "Edit" : "Add New"} Nurse</DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
               <div className="space-y-2">
@@ -196,7 +264,7 @@ const Nurses = () => {
                 </Select>
               </div>
               <Button onClick={handleAddNurse} className="w-full">
-                Add Nurse
+                {editingNurse ? "Update" : "Add"} Nurse
               </Button>
             </div>
           </DialogContent>
