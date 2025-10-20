@@ -35,147 +35,168 @@ const Auth = () => {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Check lockout
+    // Check lockout status
     if (lockoutUntil && new Date() < lockoutUntil) {
-      const remainingSeconds = Math.ceil((lockoutUntil.getTime() - Date.now()) / 1000);
-      toast.error(`Too many failed attempts. Try again in ${remainingSeconds} seconds.`);
+      const remainingSeconds = Math.ceil((lockoutUntil.getTime() - new Date().getTime()) / 1000);
+      toast.error(`Account locked. Try again in ${remainingSeconds} seconds.`);
       return;
     }
-    
-    // Implement exponential backoff
-    const delays = [0, 2000, 5000, 15000, 60000]; // 0s, 2s, 5s, 15s, 60s
-    const delay = delays[Math.min(failedAttempts, delays.length - 1)];
-    
-    if (delay > 0) {
-      setLoading(true);
-      await new Promise(resolve => setTimeout(resolve, delay));
+
+    if (!password) {
+      toast.error("Password is required");
+      return;
     }
-    
+
     setLoading(true);
 
     try {
       if (role === "patient") {
-        // For patients, check if patient_number exists in patients table
+        // For patients: verify patient_number and temp_password
         const { data: patientData, error: patientError } = await supabase
           .from("patients")
-          .select("id, patient_number, hospital_number")
+          .select("id, patient_number, temp_password, hospital_number")
           .eq("patient_number", patientNumber.trim())
           .maybeSingle();
 
         if (patientError || !patientData) {
-          toast.error("Invalid patient number");
-          setLoading(false);
+          setFailedAttempts(prev => prev + 1);
+          if (failedAttempts + 1 >= 5) {
+            const lockoutDuration = Math.pow(2, failedAttempts - 3) * 60000;
+            setLockoutUntil(new Date(Date.now() + lockoutDuration));
+          }
+          toast.error(`Invalid patient number or password. Attempt ${failedAttempts + 1} of 5.`);
           return;
         }
 
-        // Find the user_id associated with this patient number
-        const { data: roleData, error: roleError } = await supabase
+        // Verify temp password
+        if (patientData.temp_password !== password) {
+          setFailedAttempts(prev => prev + 1);
+          if (failedAttempts + 1 >= 5) {
+            const lockoutDuration = Math.pow(2, failedAttempts - 3) * 60000;
+            setLockoutUntil(new Date(Date.now() + lockoutDuration));
+          }
+          toast.error(`Invalid patient number or password. Attempt ${failedAttempts + 1} of 5.`);
+          return;
+        }
+
+        // Get user_id from user_roles
+        const { data: roleData } = await supabase
           .from("user_roles")
           .select("user_id")
-          .eq("patient_number", patientNumber.trim())
+          .eq("patient_number", patientData.patient_number)
           .eq("role", "patient")
           .maybeSingle();
 
-        if (roleError || !roleData) {
-          toast.error("Patient account not found");
-          setLoading(false);
+        if (!roleData?.user_id) {
+          toast.error("Patient account not properly configured. Contact staff.");
           return;
         }
 
-        // Sign in with patient credentials
-        // Note: Patient accounts must be created by staff with secure passwords
-        // This attempts to authenticate with the patient's email
-        const patientEmail = `patient_${patientNumber.trim()}@careconnect.com`.toLowerCase();
-        
-        // Generate a secure random password for the patient during account creation
-        // This is a placeholder - staff should create patients with proper secure passwords
+        // Sign in with patient email pattern
+        const patientEmail = `${patientData.patient_number}@patient.local`;
         const { error: signInError } = await supabase.auth.signInWithPassword({
           email: patientEmail,
-          password: password || `temp_${patientNumber.trim()}_${Math.random().toString(36).substring(2, 15)}`,
+          password: password
         });
 
         if (signInError) {
-          const newAttempts = failedAttempts + 1;
-          setFailedAttempts(newAttempts);
-          
-          if (newAttempts >= 5) {
-            const lockoutDuration = Math.pow(2, newAttempts - 4) * 60000;
-            setLockoutUntil(new Date(Date.now() + lockoutDuration));
-          }
-          
-          toast.error(`Authentication failed. Attempt ${newAttempts} of 5.`);
-          setLoading(false);
+          setFailedAttempts(prev => prev + 1);
+          toast.error("Authentication failed. Contact staff if issue persists.");
           return;
         }
+
+        setFailedAttempts(0);
+        setLockoutUntil(null);
+        toast.success("Login successful!");
+        navigate("/dashboard");
       } else {
-        // For staff, medtech, radtech - authenticate with account number and password
-        const email = `${accountNumber.trim()}@careconnect.com`.toLowerCase();
-        
-        const { data: authData, error: signInError } = await supabase.auth.signInWithPassword({
-          email: email,
-          password: password,
-        });
+        // For staff, medtech, radtech
+        if (role === "staff") {
+          // Staff uses email/password
+          const { data: authData, error: signInError } = await supabase.auth.signInWithPassword({
+            email: accountNumber.trim(),
+            password: password
+          });
 
-        if (signInError) {
-          const newAttempts = failedAttempts + 1;
-          setFailedAttempts(newAttempts);
-          
-          if (newAttempts >= 5) {
-            const lockoutDuration = Math.pow(2, newAttempts - 4) * 60000;
-            setLockoutUntil(new Date(Date.now() + lockoutDuration));
+          if (signInError) {
+            setFailedAttempts(prev => prev + 1);
+            if (failedAttempts + 1 >= 5) {
+              const lockoutDuration = Math.pow(2, failedAttempts - 3) * 60000;
+              setLockoutUntil(new Date(Date.now() + lockoutDuration));
+            }
+            toast.error(`Invalid email or password. Attempt ${failedAttempts + 1} of 5.`);
+            return;
           }
-          
-          if (signInError.message.includes("Invalid login credentials")) {
-            toast.error(`Invalid account number or password. Attempt ${newAttempts} of 5.`);
-          } else if (signInError.message.includes("Email not confirmed")) {
-            toast.error("Please confirm your email address");
-          } else {
-            toast.error(`Authentication failed. Attempt ${newAttempts} of 5.`);
+
+          // Verify role
+          const { data: roleData } = await supabase
+            .from("user_roles")
+            .select("role")
+            .eq("user_id", authData.session.user.id)
+            .maybeSingle();
+
+          if (!roleData || roleData.role !== "staff") {
+            await supabase.auth.signOut();
+            toast.error("Invalid account type");
+            return;
           }
-          setLoading(false);
-          return;
+        } else {
+          // MedTech or RadTech
+          const tableName = role === "medtech" ? "medtechs" : "radtechs";
+          const { data: techData, error: techError } = await supabase
+            .from(tableName)
+            .select("id, account_number, temp_password, user_id")
+            .eq("account_number", accountNumber.trim())
+            .maybeSingle();
+
+          if (techError || !techData) {
+            setFailedAttempts(prev => prev + 1);
+            if (failedAttempts + 1 >= 5) {
+              const lockoutDuration = Math.pow(2, failedAttempts - 3) * 60000;
+              setLockoutUntil(new Date(Date.now() + lockoutDuration));
+            }
+            toast.error(`Invalid account number or password. Attempt ${failedAttempts + 1} of 5.`);
+            return;
+          }
+
+          // Verify temp password
+          if (techData.temp_password !== password) {
+            setFailedAttempts(prev => prev + 1);
+            if (failedAttempts + 1 >= 5) {
+              const lockoutDuration = Math.pow(2, failedAttempts - 3) * 60000;
+              setLockoutUntil(new Date(Date.now() + lockoutDuration));
+            }
+            toast.error(`Invalid account number or password. Attempt ${failedAttempts + 1} of 5.`);
+            return;
+          }
+
+          if (!techData.user_id) {
+            toast.error("Account not properly configured. Contact admin.");
+            return;
+          }
+
+          // Sign in with tech email pattern
+          const techEmail = `${techData.account_number}@${role}.local`;
+          const { error: signInError } = await supabase.auth.signInWithPassword({
+            email: techEmail,
+            password: password
+          });
+
+          if (signInError) {
+            setFailedAttempts(prev => prev + 1);
+            toast.error("Authentication failed. Contact admin if issue persists.");
+            return;
+          }
         }
 
-        // Validate the role after successful authentication
-        const { data: roleData, error: roleError } = await supabase
-          .from("user_roles")
-          .select("role, account_number")
-          .eq("user_id", authData.session.user.id)
-          .single();
-
-        if (roleError || !roleData || roleData.role !== role || roleData.account_number !== accountNumber.trim()) {
-          await supabase.auth.signOut();
-          
-          const newAttempts = failedAttempts + 1;
-          setFailedAttempts(newAttempts);
-          
-          if (newAttempts >= 5) {
-            const lockoutDuration = Math.pow(2, newAttempts - 4) * 60000;
-            setLockoutUntil(new Date(Date.now() + lockoutDuration));
-          }
-          
-          toast.error(`Invalid account number or role. Attempt ${newAttempts} of 5.`);
-          setLoading(false);
-          return;
-        }
+        setFailedAttempts(0);
+        setLockoutUntil(null);
+        toast.success("Login successful!");
+        navigate("/dashboard");
       }
-
-      // Reset failed attempts on success
-      setFailedAttempts(0);
-      setLockoutUntil(null);
-      
-      toast.success("Login successful!");
-      navigate("/dashboard");
     } catch (error: any) {
-      const newAttempts = failedAttempts + 1;
-      setFailedAttempts(newAttempts);
-      
-      if (newAttempts >= 5) {
-        const lockoutDuration = Math.pow(2, newAttempts - 4) * 60000;
-        setLockoutUntil(new Date(Date.now() + lockoutDuration));
-      }
-      
-      toast.error(`An error occurred during login. Attempt ${newAttempts} of 5.`);
+      console.error("Login error:", error);
+      toast.error("An error occurred during login");
     } finally {
       setLoading(false);
     }

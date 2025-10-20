@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -5,9 +7,34 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Settings as SettingsIcon, User, Bell, Shield, Database } from "lucide-react";
+import { Settings as SettingsIcon, User, Bell, Shield, Database, KeyRound } from "lucide-react";
+import { PasswordManagement } from "@/components/PasswordManagement";
+import { ChangePassword } from "@/components/ChangePassword";
 
 const Settings = () => {
+  const [userRole, setUserRole] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchUserRole();
+  }, []);
+
+  const fetchUserRole = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", user.id)
+        .single();
+
+      setUserRole(data?.role || null);
+    } catch (error) {
+      console.error("Error fetching role:", error);
+    }
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
@@ -19,11 +46,14 @@ const Settings = () => {
       </div>
 
       <Tabs defaultValue="profile" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="profile">Profile</TabsTrigger>
           <TabsTrigger value="notifications">Notifications</TabsTrigger>
           <TabsTrigger value="security">Security</TabsTrigger>
           <TabsTrigger value="system">System</TabsTrigger>
+          {userRole === "staff" && (
+            <TabsTrigger value="passwords">Passwords</TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="profile">
@@ -94,32 +124,7 @@ const Settings = () => {
         </TabsContent>
 
         <TabsContent value="security">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Shield className="h-5 w-5" />
-                Security Settings
-              </CardTitle>
-              <CardDescription>Manage your account security</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="current-password">Current Password</Label>
-                <Input id="current-password" type="password" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="new-password">New Password</Label>
-                <Input id="new-password" type="password" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="confirm-password">Confirm New Password</Label>
-                <Input id="confirm-password" type="password" />
-              </div>
-              <Button onClick={() => toast.success("Password updated successfully")}>
-                Update Password
-              </Button>
-            </CardContent>
-          </Card>
+          <ChangePassword />
         </TabsContent>
 
         <TabsContent value="system">
@@ -156,6 +161,12 @@ const Settings = () => {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {userRole === "staff" && (
+          <TabsContent value="passwords">
+            <PasswordManagement />
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   );

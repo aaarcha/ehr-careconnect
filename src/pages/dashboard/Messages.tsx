@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -7,31 +8,156 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { MessageSquare, Send, Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
+import { sanitizeError } from "@/lib/errorHandling";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface Message {
-  id: number;
-  sender: string;
+  id: string;
+  sender_id: string;
+  recipient_id: string;
+  subject: string | null;
   content: string;
-  time: string;
-  unread?: boolean;
+  read: boolean;
+  created_at: string;
 }
 
-const mockMessages: Message[] = [
-  { id: 1, sender: "Dr. Smith", content: "Patient in Room 204 needs urgent attention", time: "10:30 AM", unread: true },
-  { id: 2, sender: "Nurse Johnson", content: "Vital signs recorded for all patients", time: "9:15 AM" },
-  { id: 3, sender: "Admin", content: "System maintenance scheduled for tonight", time: "Yesterday" },
-  { id: 4, sender: "Dr. Williams", content: "Lab results are ready for review", time: "Yesterday", unread: true },
-];
-
 const Messages = () => {
+  const [messages, setMessages] = useState<Message[]>([]);
   const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
   const [messageText, setMessageText] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [users, setUsers] = useState<any[]>([]);
+  const [selectedRecipient, setSelectedRecipient] = useState("");
+  const [messageSubject, setMessageSubject] = useState("");
 
-  const filteredMessages = mockMessages.filter((msg) =>
-    msg.sender.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    msg.content.toLowerCase().includes(searchTerm.toLowerCase())
+  useEffect(() => {
+    fetchCurrentUser();
+    fetchUsers();
+  }, []);
+
+  useEffect(() => {
+    if (currentUserId) {
+      fetchMessages();
+      
+      // Subscribe to real-time message updates
+      const channel = supabase
+        .channel('messages-changes')
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'messages',
+            filter: `recipient_id=eq.${currentUserId}`
+          },
+          () => {
+            fetchMessages();
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    }
+  }, [currentUserId]);
+
+  const fetchCurrentUser = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        setCurrentUserId(user.id);
+      }
+    } catch (error) {
+      console.error("Error fetching user:", error);
+    }
+  };
+
+  const fetchUsers = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("user_roles")
+        .select("user_id, role, account_number, patient_number");
+
+      if (error) throw error;
+      setUsers(data || []);
+    } catch (error: any) {
+      toast.error(sanitizeError(error));
+    }
+  };
+
+  const fetchMessages = async () => {
+    if (!currentUserId) return;
+
+    try {
+      const { data, error } = await supabase
+        .from("messages")
+        .select("*")
+        .or(`sender_id.eq.${currentUserId},recipient_id.eq.${currentUserId}`)
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      setMessages(data || []);
+    } catch (error: any) {
+      toast.error(sanitizeError(error));
+    }
+  };
+
+  const markAsRead = async (messageId: string) => {
+    try {
+      const { error } = await supabase
+        .from("messages")
+        .update({ read: true })
+        .eq("id", messageId);
+
+      if (error) throw error;
+      fetchMessages();
+    } catch (error: any) {
+      console.error("Error marking as read:", error);
+    }
+  };
+
+  const sendMessage = async () => {
+    if (!messageText || !selectedRecipient || !currentUserId) {
+      toast.error("Please select a recipient and enter a message");
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from("messages")
+        .insert({
+          sender_id: currentUserId,
+          recipient_id: selectedRecipient,
+          subject: messageSubject || null,
+          content: messageText,
+          read: false
+        });
+
+      if (error) throw error;
+
+      toast.success("Message sent successfully");
+      setMessageText("");
+      setMessageSubject("");
+      setSelectedRecipient("");
+      fetchMessages();
+    } catch (error: any) {
+      toast.error(sanitizeError(error));
+    }
+  };
+
+  const filteredMessages = messages.filter((msg) =>
+    msg.content.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (msg.subject && msg.subject.toLowerCase().includes(searchTerm.toLowerCase()))
   );
+
+  const getUserLabel = (userId: string) => {
+    const user = users.find(u => u.user_id === userId);
+    if (!user) return "Unknown";
+    return user.account_number || user.patient_number || `${user.role} User`;
+  };
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -65,21 +191,35 @@ const Messages = () => {
                   className={`p-4 border-b cursor-pointer hover:bg-muted/50 transition-colors ${
                     selectedMessage?.id === message.id ? "bg-muted" : ""
                   }`}
-                  onClick={() => setSelectedMessage(message)}
+                  onClick={() => {
+                    setSelectedMessage(message);
+                    if (!message.read && message.recipient_id === currentUserId) {
+                      markAsRead(message.id);
+                    }
+                  }}
                 >
                   <div className="flex items-start gap-3">
                     <Avatar>
-                      <AvatarFallback>{message.sender.charAt(0)}</AvatarFallback>
+                      <AvatarFallback>
+                        {getUserLabel(message.sender_id === currentUserId ? message.recipient_id : message.sender_id).charAt(0)}
+                      </AvatarFallback>
                     </Avatar>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between mb-1">
-                        <p className="font-medium text-sm truncate">{message.sender}</p>
-                        {message.unread && (
+                        <p className="font-medium text-sm truncate">
+                          {getUserLabel(message.sender_id === currentUserId ? message.recipient_id : message.sender_id)}
+                        </p>
+                        {!message.read && message.recipient_id === currentUserId && (
                           <Badge variant="default" className="text-xs">New</Badge>
                         )}
                       </div>
+                      {message.subject && (
+                        <p className="text-sm font-medium truncate">{message.subject}</p>
+                      )}
                       <p className="text-sm text-muted-foreground truncate">{message.content}</p>
-                      <p className="text-xs text-muted-foreground mt-1">{message.time}</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {new Date(message.created_at).toLocaleString()}
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -91,38 +231,87 @@ const Messages = () => {
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle>
-              {selectedMessage ? selectedMessage.sender : "Select a conversation"}
+              {selectedMessage ? getUserLabel(selectedMessage.sender_id === currentUserId ? selectedMessage.recipient_id : selectedMessage.sender_id) : "New Message"}
             </CardTitle>
           </CardHeader>
           <CardContent>
             {selectedMessage ? (
               <div className="space-y-4">
-                <ScrollArea className="h-[400px] pr-4">
+                <ScrollArea className="h-[300px] pr-4">
                   <div className="space-y-4">
                     <div className="bg-muted p-4 rounded-lg">
+                      {selectedMessage.subject && (
+                        <p className="font-semibold text-sm mb-2">Subject: {selectedMessage.subject}</p>
+                      )}
                       <p className="text-sm">{selectedMessage.content}</p>
-                      <p className="text-xs text-muted-foreground mt-2">{selectedMessage.time}</p>
+                      <p className="text-xs text-muted-foreground mt-2">
+                        {new Date(selectedMessage.created_at).toLocaleString()}
+                      </p>
                     </div>
                   </div>
                 </ScrollArea>
+
+                <div className="space-y-2">
+                  <Input
+                    placeholder="Subject (optional)"
+                    value={messageSubject}
+                    onChange={(e) => setMessageSubject(e.target.value)}
+                  />
+                  <div className="flex gap-2">
+                    <Textarea
+                      placeholder="Type your reply..."
+                      value={messageText}
+                      onChange={(e) => setMessageText(e.target.value)}
+                      className="min-h-[80px]"
+                    />
+                    <Button 
+                      className="self-end"
+                      onClick={() => {
+                        setSelectedRecipient(selectedMessage.sender_id === currentUserId ? selectedMessage.recipient_id : selectedMessage.sender_id);
+                        sendMessage();
+                      }}
+                    >
+                      <Send className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Recipient</label>
+                  <Select value={selectedRecipient} onValueChange={setSelectedRecipient}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select recipient" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {users.filter(u => u.user_id !== currentUserId).map((user) => (
+                        <SelectItem key={user.user_id} value={user.user_id}>
+                          {user.account_number || user.patient_number} - {user.role}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Input
+                    placeholder="Subject (optional)"
+                    value={messageSubject}
+                    onChange={(e) => setMessageSubject(e.target.value)}
+                  />
+                </div>
 
                 <div className="flex gap-2">
                   <Textarea
                     placeholder="Type your message..."
                     value={messageText}
                     onChange={(e) => setMessageText(e.target.value)}
-                    className="min-h-[80px]"
+                    className="min-h-[200px]"
                   />
-                  <Button className="self-end">
+                  <Button className="self-end" onClick={sendMessage}>
                     <Send className="h-4 w-4" />
                   </Button>
-                </div>
-              </div>
-            ) : (
-              <div className="flex items-center justify-center h-[400px] text-muted-foreground">
-                <div className="text-center">
-                  <MessageSquare className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p>Select a conversation to start messaging</p>
                 </div>
               </div>
             )}

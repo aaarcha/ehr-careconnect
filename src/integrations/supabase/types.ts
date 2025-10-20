@@ -97,6 +97,7 @@ export type Database = {
           created_at: string | null
           id: string
           name: string
+          temp_password: string | null
           user_id: string | null
         }
         Insert: {
@@ -104,6 +105,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           name: string
+          temp_password?: string | null
           user_id?: string | null
         }
         Update: {
@@ -111,6 +113,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           name?: string
+          temp_password?: string | null
           user_id?: string | null
         }
         Relationships: []
@@ -485,6 +488,7 @@ export type Database = {
           spouse_guardian_contact: string | null
           spouse_guardian_name: string | null
           status: Database["public"]["Enums"]["patient_status"] | null
+          temp_password: string | null
           updated_at: string | null
           weight: number | null
         }
@@ -525,6 +529,7 @@ export type Database = {
           spouse_guardian_contact?: string | null
           spouse_guardian_name?: string | null
           status?: Database["public"]["Enums"]["patient_status"] | null
+          temp_password?: string | null
           updated_at?: string | null
           weight?: number | null
         }
@@ -565,6 +570,7 @@ export type Database = {
           spouse_guardian_contact?: string | null
           spouse_guardian_name?: string | null
           status?: Database["public"]["Enums"]["patient_status"] | null
+          temp_password?: string | null
           updated_at?: string | null
           weight?: number | null
         }
@@ -634,6 +640,7 @@ export type Database = {
           created_at: string | null
           id: string
           name: string
+          temp_password: string | null
           user_id: string | null
         }
         Insert: {
@@ -641,6 +648,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           name: string
+          temp_password?: string | null
           user_id?: string | null
         }
         Update: {
@@ -648,6 +656,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           name?: string
+          temp_password?: string | null
           user_id?: string | null
         }
         Relationships: []
