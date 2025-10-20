@@ -15,6 +15,8 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
+import { patientSchema, vitalSignsSchema } from "@/lib/validation";
+import { z } from "zod";
 
 const AddPatient = () => {
   const { toast } = useToast();
@@ -120,21 +122,45 @@ const AddPatient = () => {
       const age = calculateAge(dateOfBirth);
       const bmi = calculateBMI(height, weight);
 
+      // Validate patient data
+      const patientData = {
+        hospital_number: hospitalNumber,
+        patient_number: patientNumber,
+        name,
+        sex,
+        date_of_birth: format(dateOfBirth, "yyyy-MM-dd"),
+        age,
+        height: height ? parseFloat(height) : null,
+        weight: weight ? parseFloat(weight) : null,
+        bmi: bmi ? parseFloat(bmi) : null,
+        contact_number: contactNumber,
+        address,
+        history_present_illness: historyPresentIllness,
+        problem_list: problemList ? problemList.split(",").map(p => p.trim()) : null,
+        allergies: allergies ? allergies.split(",").map(a => a.trim()) : null,
+        current_medications: currentMedications ? currentMedications.split(",").map(m => m.trim()) : null,
+        admitting_diagnosis: admittingDiagnosis,
+      };
+
+      try {
+        patientSchema.parse(patientData);
+      } catch (validationError) {
+        if (validationError instanceof z.ZodError) {
+          toast({
+            title: "Validation Error",
+            description: validationError.errors[0].message,
+            variant: "destructive",
+          });
+          setLoading(false);
+          return;
+        }
+      }
+
       const { data, error } = await supabase
         .from("patients")
         .insert([{
-          hospital_number: hospitalNumber,
-          patient_number: patientNumber,
-          name,
-          sex,
-          date_of_birth: format(dateOfBirth, "yyyy-MM-dd"),
-          age,
-          height: height ? parseFloat(height) : null,
-          weight: weight ? parseFloat(weight) : null,
-          bmi: bmi ? parseFloat(bmi) : null,
+          ...patientData,
           civil_status: civilStatus,
-          address,
-          contact_number: contactNumber,
           place_of_birth: placeOfBirth,
           nationality,
           religion,
@@ -149,11 +175,6 @@ const AddPatient = () => {
           past_medical_history: pastMedicalHistory,
           personal_social_history: personalSocialHistory,
           family_history: familyHistory,
-          history_present_illness: historyPresentIllness,
-          problem_list: problemList ? problemList.split(",").map(p => p.trim()) : null,
-          allergies: allergies ? allergies.split(",").map(a => a.trim()) : null,
-          current_medications: currentMedications ? currentMedications.split(",").map(m => m.trim()) : null,
-          admitting_diagnosis: admittingDiagnosis,
           status: "active" as any
         }])
         .select()
@@ -163,16 +184,32 @@ const AddPatient = () => {
 
       // Add initial vital signs if provided
       if (data && (bloodPressure || heartRate || respiratoryRate)) {
-        await supabase.from("patient_vital_signs").insert({
-          patient_id: data.id,
+        const vitalSignsData = {
           blood_pressure: bloodPressure,
           heart_rate: heartRate ? parseInt(heartRate) : null,
           respiratory_rate: respiratoryRate ? parseInt(respiratoryRate) : null,
           oxygen_saturation: oxygenSaturation ? parseFloat(oxygenSaturation) : null,
           temperature: temperature ? parseFloat(temperature) : null,
           pain_scale: painScale ? parseInt(painScale) : null,
-          notes: "Initial vital signs"
-        });
+        };
+
+        try {
+          vitalSignsSchema.parse(vitalSignsData);
+          
+          await supabase.from("patient_vital_signs").insert({
+            patient_id: data.id,
+            ...vitalSignsData,
+            notes: "Initial vital signs"
+          });
+        } catch (validationError) {
+          if (validationError instanceof z.ZodError) {
+            toast({
+              title: "Vital Signs Validation Error",
+              description: validationError.errors[0].message,
+              variant: "destructive",
+            });
+          }
+        }
       }
 
       toast({

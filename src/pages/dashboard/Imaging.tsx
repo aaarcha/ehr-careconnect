@@ -12,6 +12,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Plus, Edit, Trash2, Scan, Settings, Image as ImageIcon } from "lucide-react";
 import { format } from "date-fns";
+import { imagingSchema } from "@/lib/validation";
+import { z } from "zod";
 
 interface RadTech {
   id: string;
@@ -144,15 +146,26 @@ const Imaging = () => {
       return;
     }
 
+    const imagingData = {
+      patient_id: formData.patient_id,
+      category: formData.category,
+      imaging_type: formData.imaging_type,
+      findings: formData.findings,
+      notes: formData.notes,
+      image_url: formData.image_url,
+    };
+
     try {
-      const { error } = await supabase.from("patient_imaging").insert([{
-        patient_id: formData.patient_id,
-        category: formData.category,
-        imaging_type: formData.imaging_type,
-        findings: formData.findings,
-        notes: formData.notes,
-        image_url: formData.image_url,
-      }]);
+      imagingSchema.parse(imagingData);
+    } catch (validationError) {
+      if (validationError instanceof z.ZodError) {
+        toast.error(validationError.errors[0].message);
+        return;
+      }
+    }
+
+    try {
+      const { error } = await supabase.from("patient_imaging").insert([imagingData]);
       
       if (error) throw error;
       toast.success("Imaging result added successfully");
@@ -167,7 +180,7 @@ const Imaging = () => {
       });
       fetchImagingResults();
     } catch (error: any) {
-      toast.error(error.message);
+      toast.error("Failed to add imaging result. Please check your data.");
     }
   };
 

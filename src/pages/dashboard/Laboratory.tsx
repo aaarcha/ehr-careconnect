@@ -10,6 +10,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Plus, Edit, Trash2, TestTube, Settings } from "lucide-react";
 import { format } from "date-fns";
+import { labResultSchema } from "@/lib/validation";
+import { z } from "zod";
 
 interface MedTech {
   id: string;
@@ -214,17 +216,28 @@ const Laboratory = () => {
 
     const flag = calculateFlag(parseFloat(formData.result_value), formData.normal_range);
 
+    const labData = {
+      patient_id: formData.patient_id,
+      test_category: formData.test_category,
+      test_name: formData.test_name,
+      result_value: parseFloat(formData.result_value),
+      normal_range: formData.normal_range,
+      unit: formData.unit,
+      flag: flag,
+      notes: formData.notes,
+    };
+
     try {
-      const { error } = await supabase.from("patient_labs").insert([{
-        patient_id: formData.patient_id,
-        test_category: formData.test_category,
-        test_name: formData.test_name,
-        result_value: parseFloat(formData.result_value),
-        normal_range: formData.normal_range,
-        unit: formData.unit,
-        flag: flag,
-        notes: formData.notes,
-      }]);
+      labResultSchema.parse(labData);
+    } catch (validationError) {
+      if (validationError instanceof z.ZodError) {
+        toast.error(validationError.errors[0].message);
+        return;
+      }
+    }
+
+    try {
+      const { error } = await supabase.from("patient_labs").insert([labData]);
       
       if (error) throw error;
       toast.success("Lab test added successfully");
@@ -240,7 +253,7 @@ const Laboratory = () => {
       });
       fetchLabTests();
     } catch (error: any) {
-      toast.error(error.message);
+      toast.error("Failed to add lab test. Please check your data.");
     }
   };
 
