@@ -11,14 +11,35 @@ import logoImage from "@/assets/CareConnectLogo.jpg";
 
 type UserRole = "staff" | "medtech" | "radtech" | "patient";
 
+// Helper function to map Account/Patient ID to the seeded email
+const getEmailFromIdAndRole = (id: string, role: UserRole): string | undefined => {
+  const accountId = id.trim().toUpperCase();
+  switch (role) {
+    case "staff":
+      // Check for the specific seeded staff ID
+      return accountId === "STAFF001" ? "staff@careconnect.com" : undefined;
+    case "medtech":
+      // Check for the specific seeded medtech ID
+      return accountId === "MTECH001" ? "medtech@careconnect.com" : undefined;
+    case "radtech":
+      // Check for the specific seeded radtech ID
+      return accountId === "RTECH001" ? "radtech@careconnect.com" : undefined;
+    case "patient":
+      // Check for the specific seeded patient ID
+      return accountId === "P0000001" ? "patient@careconnect.com" : undefined;
+    default:
+      return undefined;
+  }
+};
+
 const Auth = () => {
   const navigate = useNavigate();
   const [role, setRole] = useState<UserRole>("patient");
   const [accountNumber, setAccountNumber] = useState("");
-  const [password, setPassword] = useState("");
   const [patientNumber, setPatientNumber] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  
+
   // Rate limiting state
   const [failedAttempts, setFailedAttempts] = useState(0);
   const [lockoutUntil, setLockoutUntil] = useState<Date | null>(null);
@@ -34,7 +55,7 @@ const Auth = () => {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     // Check lockout status
     if (lockoutUntil && new Date() < lockoutUntil) {
       const remainingSeconds = Math.ceil((lockoutUntil.getTime() - new Date().getTime()) / 1000);
@@ -50,153 +71,66 @@ const Auth = () => {
     setLoading(true);
 
     try {
-      if (role === "patient") {
-        // For patients: verify patient_number and temp_password
-        const { data: patientData, error: patientError } = await supabase
-          .from("patients")
-          .select("id, patient_number, temp_password, hospital_number")
-          .eq("patient_number", patientNumber.trim())
-          .maybeSingle();
+      let loginId = role === "patient" ? patientNumber : accountNumber;
+      let emailToAuth = getEmailFromIdAndRole(loginId, role);
 
-        if (patientError || !patientData) {
-          setFailedAttempts(prev => prev + 1);
-          if (failedAttempts + 1 >= 5) {
-            const lockoutDuration = Math.pow(2, failedAttempts - 3) * 60000;
-            setLockoutUntil(new Date(Date.now() + lockoutDuration));
-          }
-          toast.error(`Invalid patient number or password. Attempt ${failedAttempts + 1} of 5.`);
-          return;
-        }
-
-        // Verify temp password
-        if (patientData.temp_password !== password) {
-          setFailedAttempts(prev => prev + 1);
-          if (failedAttempts + 1 >= 5) {
-            const lockoutDuration = Math.pow(2, failedAttempts - 3) * 60000;
-            setLockoutUntil(new Date(Date.now() + lockoutDuration));
-          }
-          toast.error(`Invalid patient number or password. Attempt ${failedAttempts + 1} of 5.`);
-          return;
-        }
-
-        // Get user_id from user_roles
-        const { data: roleData } = await supabase
-          .from("user_roles")
-          .select("user_id")
-          .eq("patient_number", patientData.patient_number)
-          .eq("role", "patient")
-          .maybeSingle();
-
-        if (!roleData?.user_id) {
-          toast.error("Patient account not properly configured. Contact staff.");
-          return;
-        }
-
-        // Sign in with patient email pattern
-        const patientEmail = `${patientData.patient_number}@patient.local`;
-        const { error: signInError } = await supabase.auth.signInWithPassword({
-          email: patientEmail,
-          password: password
-        });
-
-        if (signInError) {
-          setFailedAttempts(prev => prev + 1);
-          toast.error("Authentication failed. Contact staff if issue persists.");
-          return;
-        }
-
-        setFailedAttempts(0);
-        setLockoutUntil(null);
-        toast.success("Login successful!");
-        navigate("/dashboard");
-      } else {
-        // For staff, medtech, radtech
-        if (role === "staff") {
-          // Staff uses email/password
-          const { data: authData, error: signInError } = await supabase.auth.signInWithPassword({
-            email: accountNumber.trim(),
-            password: password
-          });
-
-          if (signInError) {
-            setFailedAttempts(prev => prev + 1);
-            if (failedAttempts + 1 >= 5) {
-              const lockoutDuration = Math.pow(2, failedAttempts - 3) * 60000;
-              setLockoutUntil(new Date(Date.now() + lockoutDuration));
-            }
-            toast.error(`Invalid email or password. Attempt ${failedAttempts + 1} of 5.`);
-            return;
-          }
-
-          // Verify role
-          const { data: roleData } = await supabase
-            .from("user_roles")
-            .select("role")
-            .eq("user_id", authData.session.user.id)
-            .maybeSingle();
-
-          if (!roleData || roleData.role !== "staff") {
-            await supabase.auth.signOut();
-            toast.error("Invalid account type");
-            return;
-          }
-        } else {
-          // MedTech or RadTech
-          const tableName = role === "medtech" ? "medtechs" : "radtechs";
-          const { data: techData, error: techError } = await supabase
-            .from(tableName)
-            .select("id, account_number, temp_password, user_id")
-            .eq("account_number", accountNumber.trim())
-            .maybeSingle();
-
-          if (techError || !techData) {
-            setFailedAttempts(prev => prev + 1);
-            if (failedAttempts + 1 >= 5) {
-              const lockoutDuration = Math.pow(2, failedAttempts - 3) * 60000;
-              setLockoutUntil(new Date(Date.now() + lockoutDuration));
-            }
-            toast.error(`Invalid account number or password. Attempt ${failedAttempts + 1} of 5.`);
-            return;
-          }
-
-          // Verify temp password
-          if (techData.temp_password !== password) {
-            setFailedAttempts(prev => prev + 1);
-            if (failedAttempts + 1 >= 5) {
-              const lockoutDuration = Math.pow(2, failedAttempts - 3) * 60000;
-              setLockoutUntil(new Date(Date.now() + lockoutDuration));
-            }
-            toast.error(`Invalid account number or password. Attempt ${failedAttempts + 1} of 5.`);
-            return;
-          }
-
-          if (!techData.user_id) {
-            toast.error("Account not properly configured. Contact admin.");
-            return;
-          }
-
-          // Sign in with tech email pattern
-          const techEmail = `${techData.account_number}@${role}.local`;
-          const { error: signInError } = await supabase.auth.signInWithPassword({
-            email: techEmail,
-            password: password
-          });
-
-          if (signInError) {
-            setFailedAttempts(prev => prev + 1);
-            toast.error("Authentication failed. Contact admin if issue persists.");
-            return;
-          }
-        }
-
-        setFailedAttempts(0);
-        setLockoutUntil(null);
-        toast.success("Login successful!");
-        navigate("/dashboard");
+      if (!emailToAuth) {
+        setFailedAttempts(prev => prev + 1);
+        toast.error(`Invalid login ID or role selected. Attempt ${failedAttempts + 1} of 5.`);
+        setLoading(false);
+        return;
       }
+
+      // 1. Attempt standard email/password authentication via Supabase Auth
+      const { data: authData, error: signInError } = await supabase.auth.signInWithPassword({
+        email: emailToAuth,
+        password: password
+      });
+
+      if (signInError) {
+        setFailedAttempts(prev => prev + 1);
+        if (failedAttempts + 1 >= 5) {
+          const lockoutDuration = Math.pow(2, failedAttempts - 3) * 60000;
+          setLockoutUntil(new Date(Date.now() + lockoutDuration));
+        }
+        toast.error(`Invalid ID or password. Attempt ${failedAttempts + 1} of 5.`);
+        setLoading(false);
+        return;
+      }
+
+      // 2. Security Check: Verify the authenticated user's role against the selected role.
+      // This prevents a user who belongs to multiple roles from logging in with the wrong role selected.
+      const userId = authData?.user?.id;
+      if (!userId) {
+        await supabase.auth.signOut();
+        toast.error("Authentication error: User ID not found.");
+        setLoading(false);
+        return;
+      }
+
+      const { data: roleData, error: roleError } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", userId)
+        .eq("role", role) // Check if the user has the selected role
+        .maybeSingle();
+
+      if (roleError || !roleData) {
+        await supabase.auth.signOut();
+        toast.error(`Login error: Account is not configured as a ${role}.`);
+        setLoading(false);
+        return;
+      }
+
+      // Success
+      setFailedAttempts(0);
+      setLockoutUntil(null);
+      toast.success(`Login successful as ${role}!`);
+      navigate("/dashboard");
+
     } catch (error: any) {
       console.error("Login error:", error);
-      toast.error("An error occurred during login");
+      toast.error("An unexpected error occurred during login.");
     } finally {
       setLoading(false);
     }
@@ -243,56 +177,42 @@ const Auth = () => {
             </div>
 
             {role === "patient" ? (
-              <>
-                <div className="space-y-2">
-                  <Label htmlFor="patientNumber">Patient Number</Label>
-                  <Input
-                    id="patientNumber"
-                    type="text"
-                    placeholder="Enter patient number"
-                    value={patientNumber}
-                    onChange={(e) => setPatientNumber(e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="patientPassword">Password</Label>
-                  <Input
-                    id="patientPassword"
-                    type="password"
-                    placeholder="Enter password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                  />
-                </div>
-              </>
+              <div className="space-y-2">
+                <Label htmlFor="patientNumber">Patient Number</Label>
+                <Input
+                  id="patientNumber"
+                  type="text"
+                  placeholder="e.g., P0000001"
+                  value={patientNumber}
+                  onChange={(e) => setPatientNumber(e.target.value)}
+                  required
+                />
+              </div>
             ) : (
-              <>
-                <div className="space-y-2">
-                  <Label htmlFor="accountNumber">Account Number / ID</Label>
-                  <Input
-                    id="accountNumber"
-                    type="text"
-                    placeholder="e.g., STAFF001"
-                    value={accountNumber}
-                    onChange={(e) => setAccountNumber(e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="password">Password</Label>
-                  <Input
-                    id="password"
-                    type="password"
-                    placeholder="Enter password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                  />
-                </div>
-              </>
+              <div className="space-y-2">
+                <Label htmlFor="accountNumber">Account Number / ID</Label>
+                <Input
+                  id="accountNumber"
+                  type="text"
+                  placeholder="e.g., STAFF001, MTECH001, RTECH001"
+                  value={accountNumber}
+                  onChange={(e) => setAccountNumber(e.target.value)}
+                  required
+                />
+              </div>
             )}
+
+            <div className="space-y-2">
+              <Label htmlFor="password">Password</Label>
+              <Input
+                id="password"
+                type="password"
+                placeholder="Enter password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+            </div>
 
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? "Logging in..." : "Login"}
@@ -301,8 +221,10 @@ const Auth = () => {
 
           <div className="mt-6 text-sm text-muted-foreground text-center space-y-1">
             <p className="font-semibold">Test Credentials:</p>
-            <p>Staff: STAFF001 / staff123</p>
-            <p>Patient: Use patient number + assigned password</p>
+            <p>Staff: **STAFF001 / staff123**</p>
+            <p>MedTech: **MTECH001 / tech123**</p>
+            <p>RadTech: **RTECH001 / rad123**</p>
+            <p>Patient: **P0000001 / patient123**</p>
           </div>
         </CardContent>
       </Card>
