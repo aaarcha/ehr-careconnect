@@ -1,8 +1,16 @@
 import { 
   Home, Users, UserCog, FileText, FilePlus, TestTube, Scan, 
-  Settings, MessageSquare, HelpCircle, Loader2 
+  Settings, MessageSquare, HelpCircle, Loader2, Menu, LogOut, User
 } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
+} from "@/components/ui/dropdown-menu";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Sidebar,
@@ -29,9 +37,11 @@ interface NavItem {
 }
 
 export function AppSidebar() {
-  const { state } = useSidebar();
+  const { state, toggleSidebar } = useSidebar();
   const navigate = useNavigate();
   const [userRole, setUserRole] = useState<string | null>(null);
+  const [userName, setUserName] = useState<string | null>(null);
+  const [userAvatar, setUserAvatar] = useState<string | null>(null);
   // Start in loading state until session is checked or listener fires
   const [isLoading, setIsLoading] = useState(true); 
 
@@ -64,14 +74,18 @@ export function AppSidebar() {
   useEffect(() => {
     
     // 1. Initial check for existing session on component mount
-    supabase.auth.getSession().then(({ data: { session } }) => {
-        if (session?.user) {
-            fetchUserRole(session.user.id);
-        } else {
-            setIsLoading(false);
-            setUserRole(null);
-        }
-    });
+  supabase.auth.getSession().then(({ data: { session } }) => {
+    if (session?.user) {
+      fetchUserRole(session.user.id);
+      // Try to populate a friendly display name and avatar if available
+      const user = session.user;
+      setUserName(user.user_metadata?.full_name || user.user_metadata?.name || user.email || null);
+      setUserAvatar(user.user_metadata?.avatar_url || null);
+    } else {
+      setIsLoading(false);
+      setUserRole(null);
+    }
+  });
 
     // 2. Set up the listener for authentication events
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -145,8 +159,6 @@ export function AppSidebar() {
     
     const commonItems: NavItem[] = [
       { title: "Messages", url: "/dashboard/messages", icon: MessageSquare },
-      { title: "Settings", url: "/dashboard/settings", icon: Settings },
-      { title: "Help", url: "/dashboard/help", icon: HelpCircle },
     ];
 
     return [...roleSpecificItems, ...commonItems];
@@ -166,44 +178,75 @@ export function AppSidebar() {
   };
 
   return (
-    <Sidebar className={state === "collapsed" ? "w-14" : "w-64"}>
-      <div className="flex items-center justify-center p-4">
-        {state !== "collapsed" ? (
-          <img src={logoImage} alt="CareConnect Logo" className="h-8 w-auto" />
-        ) : (
-          <img src={logoImage} alt="Logo" className="h-6 w-6" />
-        )}
-      </div>
-      
-      <SidebarTrigger className="m-2 self-end" />
+    <>
+      {/* Fixed top header shown on every page */}
+      <header className="fixed top-0 left-0 right-0 z-50 h-14 bg-white border-b border-gray-200 flex items-center px-4">
+        <button
+          aria-label="Toggle sidebar"
+          title="Toggle sidebar"
+          onClick={toggleSidebar}
+          className="inline-flex h-10 w-10 items-center justify-center rounded-md text-foreground hover:scale-105 transition-transform"
+        >
+          <Menu className="h-5 w-5" />
+        </button>
+
+        <div className="flex items-center gap-3 ml-3">
+          <img src={logoImage} alt="CareConnect logo" className="h-10 w-10 rounded-full object-cover" />
+          <span className="font-semibold text-lg">CareConnect</span>
+        </div>
+
+        {/* User menu in header (upper-right) */}
+        <div className="ml-auto flex items-center gap-3">
+          <span className="text-sm font-medium text-gray-700">{userName || 'Sign in'}</span>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="inline-flex items-center rounded-md p-1 hover:bg-muted">
+                <User className="h-6 w-6 text-gray-700" />
+                <span className="sr-only">Open user menu</span>
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent side="bottom" align="end">
+              <DropdownMenuLabel>Account</DropdownMenuLabel>
+              <DropdownMenuItem onSelect={() => navigate('/dashboard/settings')}>Settings</DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => navigate('/dashboard/help')}>Help</DropdownMenuItem>
+              <DropdownMenuSeparator />
+              {userName ? (
+                <DropdownMenuItem onSelect={handleLogout}>Sign out</DropdownMenuItem>
+              ) : (
+                <DropdownMenuItem onSelect={() => navigate('/auth')}>Sign in</DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </header>
+
+  <Sidebar style={{ top: "3.5rem" }} className={`${state === "collapsed" ? "w-14" : "w-64"} bg-white text-gray-800 dark:text-gray-100`}>
 
       {/* CRITICAL FIX: Key forces re-render when role or loading status changes. */}
-      <SidebarContent key={userRole || (isLoading ? "loading" : "no-role")}>
+  <SidebarContent key={userRole || (isLoading ? "loading" : "no-role") } className="pb-20">
         {isLoading ? (
           <div className="flex items-center justify-center h-full p-4">
             <Loader2 className="h-6 w-6 animate-spin text-primary" />
           </div>
         ) : (
           <SidebarGroup>
-            <SidebarGroupLabel>Main Menu</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
                 {navItems.map((item) => (
                   <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton asChild>
-                      <NavLink
-                        to={item.url}
-                        end
-                        className={({ isActive }) =>
-                          isActive
-                            ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-                            : "hover:bg-sidebar-accent/50"
-                        }
-                      >
-                        <item.icon className="h-4 w-4" />
-                        {state !== "collapsed" && <span>{item.title}</span>}
-                      </NavLink>
-                    </SidebarMenuButton>
+                    <NavLink
+                      to={item.url}
+                      end
+                      className={({ isActive }) =>
+                        isActive
+                          ? "flex items-center gap-2 p-2 rounded-md bg-gradient-to-r from-emerald-600 to-emerald-400 text-white font-medium shadow-sm"
+                          : "flex items-center gap-2 p-2 rounded-md text-gray-700 hover:bg-emerald-100 hover:text-gray-800"
+                      }
+                    >
+                      <item.icon className="h-4 w-4 text-current" />
+                      {state !== "collapsed" && <span>{item.title}</span>}
+                    </NavLink>
                   </SidebarMenuItem>
                 ))}
               </SidebarMenu>
@@ -212,16 +255,8 @@ export function AppSidebar() {
         )}
       </SidebarContent>
 
-      <div className="mt-auto p-4 border-t border-sidebar-border">
-        <Button
-          variant="outline"
-          onClick={handleLogout}
-          className="w-full"
-        >
-          {state !== "collapsed" && "Logout"}
-          {state === "collapsed" && "⏻"}
-        </Button>
-      </div>
+    {/* Remove sign out from the sidebar footer; account actions moved to header */}
     </Sidebar>
+    </>
   );
 }
