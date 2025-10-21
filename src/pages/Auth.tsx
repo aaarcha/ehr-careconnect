@@ -219,13 +219,7 @@ const Auth = () => {
             </Button>
           </form>
 
-          <div className="mt-6 text-sm text-muted-foreground text-center space-y-1">
-            <p className="font-semibold">Test Credentials:</p>
-            <p>Staff: **STAFF001 / staff123**</p>
-            <p>MedTech: **MTECH001 / tech123**</p>
-            <p>RadTech: **RTECH001 / rad123**</p>
-            <p>Patient: **P0000001 / patient123**</p>
-          </div>
+          
         </CardContent>
       </Card>
     </div>
