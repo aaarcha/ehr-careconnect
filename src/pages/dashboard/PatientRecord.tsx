@@ -14,6 +14,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -62,6 +64,297 @@ interface PhysicalAssessment {
   neurological_assessment: any;
 }
 
+interface EditPatientForm extends Patient {
+  // Add any additional form-specific fields here
+}
+
+const EditPatientDialog = ({
+  open,
+  onOpenChange,
+  patient,
+  onSave,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  patient: Patient;
+  onSave: (data: EditPatientForm) => Promise<void>;
+}) => {
+  const [formData, setFormData] = useState<EditPatientForm>({ ...patient });
+  const [loading, setLoading] = useState(false);
+
+  const handleInputChange = (field: keyof EditPatientForm, value: any) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleArrayChange = (field: keyof EditPatientForm, value: string) => {
+    const currentArray = formData[field] as string[] || [];
+    if (value && !currentArray.includes(value)) {
+      setFormData((prev) => ({
+        ...prev,
+        [field]: [...currentArray, value],
+      }));
+    }
+  };
+
+  const handleRemoveArrayItem = (field: keyof EditPatientForm, index: number) => {
+    const currentArray = formData[field] as string[] || [];
+    setFormData((prev) => ({
+      ...prev,
+      [field]: currentArray.filter((_, i) => i !== index),
+    }));
+  };
+
+  const handleSubmit = async () => {
+    try {
+      setLoading(true);
+      await onSave(formData);
+      onOpenChange(false);
+    } catch (error: any) {
+      toast.error("Error saving changes: " + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-3xl">
+        <DialogHeader>
+          <DialogTitle>Edit Patient Record</DialogTitle>
+        </DialogHeader>
+        <ScrollArea className="max-h-[80vh]">
+          <div className="space-y-6 p-2">
+            <Accordion type="single" collapsible className="w-full">
+              {/* Demographics Section */}
+              <AccordionItem value="demographics">
+                <AccordionTrigger>Demographics</AccordionTrigger>
+                <AccordionContent>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="name">Name</Label>
+                      <Input
+                        id="name"
+                        value={formData.name}
+                        onChange={(e) => handleInputChange("name", e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="age">Age</Label>
+                      <Input
+                        id="age"
+                        type="number"
+                        value={formData.age}
+                        onChange={(e) => handleInputChange("age", parseInt(e.target.value))}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="sex">Sex</Label>
+                      <Select value={formData.sex} onValueChange={(value) => handleInputChange("sex", value)}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select sex" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="male">Male</SelectItem>
+                          <SelectItem value="female">Female</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="dob">Date of Birth</Label>
+                      <Input
+                        id="dob"
+                        type="date"
+                        value={formData.date_of_birth}
+                        onChange={(e) => handleInputChange("date_of_birth", e.target.value)}
+                      />
+                    </div>
+                    <div className="col-span-2 space-y-2">
+                      <Label htmlFor="address">Address</Label>
+                      <Input
+                        id="address"
+                        value={formData.address}
+                        onChange={(e) => handleInputChange("address", e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="contact">Contact Number</Label>
+                      <Input
+                        id="contact"
+                        value={formData.contact_number}
+                        onChange={(e) => handleInputChange("contact_number", e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="hospital_number">Hospital Number</Label>
+                      <Input
+                        id="hospital_number"
+                        value={formData.hospital_number}
+                        onChange={(e) => handleInputChange("hospital_number", e.target.value)}
+                      />
+                    </div>
+                    <div className="col-span-2">
+                      <div className="flex items-center space-x-2">
+                        <Checkbox
+                          id="philhealth"
+                          checked={formData.philhealth}
+                          onCheckedChange={(checked) => handleInputChange("philhealth", checked)}
+                        />
+                        <Label htmlFor="philhealth">PhilHealth Member</Label>
+                      </div>
+                    </div>
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+
+              {/* Admission Details */}
+              <AccordionItem value="admission">
+                <AccordionTrigger>Admission Details</AccordionTrigger>
+                <AccordionContent>
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="admitting_diagnosis">Admitting Diagnosis</Label>
+                      <Textarea
+                        id="admitting_diagnosis"
+                        value={formData.admitting_diagnosis}
+                        onChange={(e) => handleInputChange("admitting_diagnosis", e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="department">Department</Label>
+                      <Input
+                        id="department"
+                        value={formData.admit_to_department}
+                        onChange={(e) => handleInputChange("admit_to_department", e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="location">Location</Label>
+                      <Input
+                        id="location"
+                        value={formData.admit_to_location}
+                        onChange={(e) => handleInputChange("admit_to_location", e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+
+              {/* Medical History */}
+              <AccordionItem value="history">
+                <AccordionTrigger>Medical History</AccordionTrigger>
+                <AccordionContent>
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="history_of_present_illness">History of Present Illness</Label>
+                      <Textarea
+                        id="history_of_present_illness"
+                        value={formData.history_of_present_illness || ""}
+                        onChange={(e) => handleInputChange("history_of_present_illness", e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="past_medical_history">Past Medical History</Label>
+                      <Textarea
+                        id="past_medical_history"
+                        value={typeof formData.past_medical_history === "string" 
+                          ? formData.past_medical_history 
+                          : JSON.stringify(formData.past_medical_history, null, 2)}
+                        onChange={(e) => handleInputChange("past_medical_history", e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="personal_social_history">Personal & Social History</Label>
+                      <Textarea
+                        id="personal_social_history"
+                        value={typeof formData.personal_social_history === "string"
+                          ? formData.personal_social_history
+                          : JSON.stringify(formData.personal_social_history, null, 2)}
+                        onChange={(e) => handleInputChange("personal_social_history", e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+
+              {/* Problem List & Allergies */}
+              <AccordionItem value="problems">
+                <AccordionTrigger>Problem List & Allergies</AccordionTrigger>
+                <AccordionContent>
+                  <div className="space-y-6">
+                    <div className="space-y-4">
+                      <Label>Problem List</Label>
+                      <div className="flex flex-wrap gap-2">
+                        {(formData.problem_list || []).map((problem, index) => (
+                          <Badge key={index} variant="secondary" className="flex items-center gap-2">
+                            {problem}
+                            <button
+                              onClick={() => handleRemoveArrayItem("problem_list", index)}
+                              className="hover:text-destructive"
+                            >
+                              ×
+                            </button>
+                          </Badge>
+                        ))}
+                      </div>
+                      <div className="flex gap-2">
+                        <Input
+                          placeholder="Add problem"
+                          onKeyPress={(e) => {
+                            if (e.key === "Enter") {
+                              handleArrayChange("problem_list", e.currentTarget.value);
+                              e.currentTarget.value = "";
+                            }
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      <Label>Allergies</Label>
+                      <div className="flex flex-wrap gap-2">
+                        {(formData.allergies || []).map((allergy, index) => (
+                          <Badge key={index} variant="secondary" className="flex items-center gap-2">
+                            {allergy}
+                            <button
+                              onClick={() => handleRemoveArrayItem("allergies", index)}
+                              className="hover:text-destructive"
+                            >
+                              ×
+                            </button>
+                          </Badge>
+                        ))}
+                      </div>
+                      <div className="flex gap-2">
+                        <Input
+                          placeholder="Add allergy"
+                          onKeyPress={(e) => {
+                            if (e.key === "Enter") {
+                              handleArrayChange("allergies", e.currentTarget.value);
+                              e.currentTarget.value = "";
+                            }
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
+          </div>
+        </ScrollArea>
+        <div className="flex justify-end gap-4 mt-4">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button onClick={handleSubmit} disabled={loading}>
+            {loading ? "Saving..." : "Save Changes"}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
 const PatientRecord = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -76,6 +369,7 @@ const PatientRecord = () => {
   const [showAssessmentDialog, setShowAssessmentDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showAssignDialog, setShowAssignDialog] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
   const [selectedDoctorId, setSelectedDoctorId] = useState("");
   const [assessmentForm, setAssessmentForm] = useState({
     // Skin Assessment
@@ -213,6 +507,41 @@ const PatientRecord = () => {
       toast.error("Error loading patient data: " + error.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSavePatient = async (data: EditPatientForm) => {
+    try {
+      const { error } = await supabase
+        .from("patients")
+        .update({
+          name: data.name,
+          age: data.age,
+          sex: data.sex,
+          date_of_birth: data.date_of_birth,
+          address: data.address,
+          contact_number: data.contact_number,
+          hospital_number: data.hospital_number,
+          philhealth: data.philhealth,
+          admit_to_department: data.admit_to_department,
+          admit_to_location: data.admit_to_location,
+          admitting_diagnosis: data.admitting_diagnosis,
+          allergies: data.allergies,
+          current_medications: data.current_medications,
+          problem_list: data.problem_list,
+          past_medical_history: data.past_medical_history,
+          personal_social_history: data.personal_social_history,
+          history_of_present_illness: data.history_of_present_illness,
+        })
+        .eq("id", id);
+
+      if (error) throw error;
+      
+      toast.success("Patient record updated successfully");
+      await fetchPatientData();
+    } catch (error: any) {
+      toast.error("Error updating patient: " + error.message);
+      throw error;
     }
   };
 
@@ -413,9 +742,9 @@ const PatientRecord = () => {
             </Button>
           )}
 
-          <Button variant="outline">
+          <Button variant="outline" onClick={() => setShowEditDialog(true)}>
             <Edit className="h-4 w-4 mr-2" />
-            Edit
+            Edit Patient
           </Button>
 
           <Button
@@ -1231,6 +1560,14 @@ const PatientRecord = () => {
           </div>
         </TabsContent>
       </Tabs>
+
+      {/* Edit Patient Dialog */}
+      <EditPatientDialog
+        open={showEditDialog}
+        onOpenChange={setShowEditDialog}
+        patient={patient}
+        onSave={handleSavePatient}
+      />
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
