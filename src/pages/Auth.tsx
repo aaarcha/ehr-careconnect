@@ -140,11 +140,11 @@ const Auth = () => {
     <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-animated bg-[length:200%_200%] animate-gradient-shift">
       <Card className="w-full max-w-md shadow-glow">
         <CardHeader className="space-y-4 text-center">
-          <div className="mx-auto w-32 h-32 mb-4">
+          <div className="mx-auto w-32 h-32 mb-4 rounded-full overflow-hidden">
             <img
               src={logoImage}
               alt="CareConnect Logo"
-              className="w-full h-full object-contain"
+              className="w-full h-full object-cover" // object-cover is better for filling the circle
             />
           </div>
           <CardTitle className="text-3xl font-bold text-primary">CareConnect</CardTitle>
