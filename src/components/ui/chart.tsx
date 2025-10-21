@@ -6,6 +6,15 @@ import { cn } from "@/lib/utils";
 // Format: { THEME_NAME: CSS_SELECTOR }
 const THEMES = { light: "", dark: ".dark" } as const;
 
+// Pleasant green palette (used as fallbacks when a series doesn't provide a color)
+const DEFAULT_GREEN_PALETTE = [
+  "#0f9d58", // primary green
+  "#34a853",
+  "#7bd389",
+  "#b7e4c7",
+  "#e6f7ee",
+];
+
 export type ChartConfig = {
   [k in string]: {
     label?: React.ReactNode;
@@ -45,7 +54,17 @@ const ChartContainer = React.forwardRef<
         data-chart={chartId}
         ref={ref}
         className={cn(
-          "flex aspect-video justify-center text-xs [&_.recharts-cartesian-axis-tick_text]:fill-muted-foreground [&_.recharts-cartesian-grid_line[stroke='#ccc']]:stroke-border/50 [&_.recharts-curve.recharts-tooltip-cursor]:stroke-border [&_.recharts-dot[stroke='#fff']]:stroke-transparent [&_.recharts-layer]:outline-none [&_.recharts-polar-grid_[stroke='#ccc']]:stroke-border [&_.recharts-radial-bar-background-sector]:fill-muted [&_.recharts-rectangle.recharts-tooltip-cursor]:fill-muted [&_.recharts-reference-line_[stroke='#ccc']]:stroke-border [&_.recharts-sector[stroke='#fff']]:stroke-transparent [&_.recharts-sector]:outline-none [&_.recharts-surface]:outline-none",
+          "flex aspect-video justify-center text-xs",
+          // axis ticks / grid / dots / surface improvements for readability
+          "[&_.recharts-cartesian-axis-tick_text]:fill-muted-foreground",
+          "[&_.recharts-cartesian-axis-tick_text]:font-medium",
+          "[&_.recharts-cartesian-axis-tick_text]:text-xs",
+          "[&_.recharts-cartesian-grid_line]:opacity-40",
+          "[&_.recharts-cartesian-grid_line]:stroke-border",
+          "[&_.recharts-dot]:r-1.5 [&_.recharts-dot]:stroke-white",
+          "[&_.recharts-line]:stroke-width-2",
+          "[&_.recharts-surface]:outline-none",
+          "[&_.recharts-layer]:outline-none",
           className,
         )}
         {...props}
@@ -61,7 +80,9 @@ ChartContainer.displayName = "Chart";
 const ChartStyle = ({ id, config }: { id: string; config: ChartConfig }) => {
   const colorConfig = Object.entries(config).filter(([_, config]) => config.theme || config.color);
 
-  if (!colorConfig.length) {
+  // If no explicit colors are configured, provide defaults from the green palette
+  const keys = Object.keys(config);
+  if (!colorConfig.length && !keys.length) {
     return null;
   }
 
@@ -86,6 +107,15 @@ ${colorConfig
     />
   );
 };
+
+// Utility to pick a fallback green when a series doesn't have a color configured.
+function fallbackGreenForKey(key: string) {
+  // deterministic pick by hashing key to index
+  let h = 0;
+  for (let i = 0; i < key.length; i++) h = (h << 5) - h + key.charCodeAt(i);
+  const idx = Math.abs(h) % DEFAULT_GREEN_PALETTE.length;
+  return DEFAULT_GREEN_PALETTE[idx];
+}
 
 const ChartTooltip = RechartsPrimitive.Tooltip;
 
@@ -163,7 +193,8 @@ const ChartTooltipContent = React.forwardRef<
           {payload.map((item, index) => {
             const key = `${nameKey || item.name || item.dataKey || "value"}`;
             const itemConfig = getPayloadConfigFromPayload(config, item, key);
-            const indicatorColor = color || item.payload.fill || item.color;
+            const rawIndicatorColor = color || item.payload.fill || item.color;
+            const indicatorColor = rawIndicatorColor || fallbackGreenForKey(key);
 
             return (
               <div
@@ -261,7 +292,7 @@ const ChartLegendContent = React.forwardRef<
               <div
                 className="h-2 w-2 shrink-0 rounded-[2px]"
                 style={{
-                  backgroundColor: item.color,
+                  backgroundColor: item.color || fallbackGreenForKey(key),
                 }}
               />
             )}
