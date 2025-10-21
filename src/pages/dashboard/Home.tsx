@@ -3,9 +3,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Activity, Users, UserPlus, Bed, Stethoscope, Heart, Droplet } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from "recharts";
+import { ChartContainer, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart";
 import { Calendar } from "@/components/ui/calendar";
 
-const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#82CA9D', '#FFC658'];
+  // Pleasant green palette used for charts
+  const GREEN_PALETTE = ['#59AC77', '#3A6F43', '#FDAAAA', '#FFD5D5', '#F8F7BA', '#BDE3C3', '#A3CCDA'];
 
 const Home = () => {
   const [stats, setStats] = useState({
@@ -119,15 +121,26 @@ const Home = () => {
                 Loading...
               </div>
             ) : departmentData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={departmentData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" />
-                  <YAxis />
-                  <Tooltip />
-                  <Bar dataKey="value" fill="hsl(var(--primary))" />
-                </BarChart>
-              </ResponsiveContainer>
+              // Build a chart config mapping each department name to a green color
+              <ChartContainer
+                config={Object.fromEntries(
+                  departmentData.map((d, i) => [d.name, { label: d.name, color: GREEN_PALETTE[i % GREEN_PALETTE.length] }]),
+                )}
+              >
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={departmentData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" />
+                    <YAxis />
+                    <Tooltip content={<ChartTooltipContent />} />
+                    <Bar dataKey="value">
+                      {departmentData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={`var(--color-${entry.name})`} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </ChartContainer>
             ) : (
               <div className="flex items-center justify-center h-full text-muted-foreground">
                 No data available
@@ -147,25 +160,31 @@ const Home = () => {
                 Loading...
               </div>
             ) : departmentData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={departmentData}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={(entry) => entry.name}
-                    outerRadius={80}
-                    fill="#8884d8"
-                    dataKey="value"
-                  >
-                    {departmentData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
+              <ChartContainer
+                config={Object.fromEntries(
+                  departmentData.map((d, i) => [d.name, { label: d.name, color: GREEN_PALETTE[i % GREEN_PALETTE.length] }]),
+                )}
+              >
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={departmentData}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={(entry) => entry.name}
+                      outerRadius={80}
+                      dataKey="value"
+                    >
+                      {departmentData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={`var(--color-${entry.name})`} />
+                      ))}
+                    </Pie>
+                    <Tooltip content={<ChartTooltipContent />} />
+                    <ChartLegend content={<ChartLegendContent />} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </ChartContainer>
             ) : (
               <div className="flex items-center justify-center h-full text-muted-foreground">
                 No data available
