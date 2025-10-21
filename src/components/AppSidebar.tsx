@@ -201,18 +201,30 @@ export function AppSidebar() {
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="inline-flex items-center rounded-md p-1 hover:bg-muted">
-                <User className="h-6 w-6 text-gray-700" />
+              <button
+                className="group inline-flex items-center justify-center h-8 w-8 rounded-full transition-colors duration-150 hover:bg-gradient-to-r hover:from-emerald-600 hover:to-emerald-400"
+                aria-label="Open user menu"
+              >
                 <span className="sr-only">Open user menu</span>
+                <User className="h-4 w-4 text-gray-700 group-hover:text-white" />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent side="bottom" align="end">
               <DropdownMenuLabel>Account</DropdownMenuLabel>
-              <DropdownMenuItem onSelect={() => navigate('/dashboard/settings')}>Settings</DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => navigate('/dashboard/help')}>Help</DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => navigate('/dashboard/settings')}>
+                <Settings className="h-4 w-4 mr-2" />
+                Settings
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => navigate('/dashboard/help')}>
+                <HelpCircle className="h-4 w-4 mr-2" />
+                Help
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               {userName ? (
-                <DropdownMenuItem onSelect={handleLogout}>Sign out</DropdownMenuItem>
+                <DropdownMenuItem onSelect={handleLogout}>
+                  <LogOut className="h-4 w-4 mr-2" />
+                  Sign out
+                </DropdownMenuItem>
               ) : (
                 <DropdownMenuItem onSelect={() => navigate('/auth')}>Sign in</DropdownMenuItem>
               )}
