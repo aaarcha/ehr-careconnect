@@ -42,6 +42,10 @@ interface Patient {
   allergies: string[] | null;
   current_medications: string[] | null;
   problem_list: string[] | null;
+  // additional history fields stored on the patient record (may be JSON or strings)
+  past_medical_history?: any;
+  personal_social_history?: any;
+  history_of_present_illness?: string | null;
   philhealth: boolean;
 }
 
@@ -139,6 +143,37 @@ const PatientRecord = () => {
   useEffect(() => {
     fetchPatientData();
   }, [id]);
+
+  // Helper to render JSON-like history fields safely
+  const renderJsonData = (data: any) => {
+    if (!data) return <p className="text-sm text-muted-foreground">No data</p>;
+
+    let obj = data;
+    if (typeof data === "string") {
+      try {
+        obj = JSON.parse(data);
+      } catch (e) {
+        // not JSON, render raw string
+        return <p className="text-sm">{data}</p>;
+      }
+    }
+
+    if (typeof obj !== "object") return <p className="text-sm">{String(obj)}</p>;
+
+    const entries = Object.entries(obj);
+    if (entries.length === 0) return <p className="text-sm text-muted-foreground">No data</p>;
+
+    return (
+      <div className="space-y-1">
+        {entries.map(([key, value]) => (
+          <div key={key} className="text-sm">
+            <span className="font-medium capitalize">{key.replace(/_/g, " ")}:</span>{" "}
+            <span>{typeof value === "boolean" ? (value ? "Yes" : "No") : String(value)}</span>
+          </div>
+        ))}
+      </div>
+    );
+  };
 
   const fetchPatientData = async () => {
     try {
@@ -276,6 +311,7 @@ const PatientRecord = () => {
           <div>
             <h1 className="text-3xl font-bold text-primary">{patient.name}</h1>
             <p className="text-muted-foreground">Hospital No: {patient.hospital_number}</p>
+            <p className="text-muted-foreground">Assigned Doctor: {doctors.find(d => d.id === patient.attending_physician_id)?.name || "Not assigned"}</p>
             <Badge variant={patient.status === "active" ? "default" : "secondary"} className="mt-2">
               {patient.status}
             </Badge>
@@ -889,6 +925,11 @@ const PatientRecord = () => {
                 </CardHeader>
                 <CardContent className="space-y-2">
                   <p className="text-sm">{patient.admitting_diagnosis || "No diagnosis recorded"}</p>
+                  {patient.admitting_diagnosis && (
+                    <div className="text-xs text-muted-foreground mt-2">
+                      <p>Admitting Diagnosis: {patient.admitting_diagnosis}</p>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 
@@ -910,25 +951,98 @@ const PatientRecord = () => {
               </Card>
             </div>
 
+            {/* Medical History & Problem List */}
+            <div className="grid md:grid-cols-3 gap-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>History of Present Illness</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {patient.history_of_present_illness ? (
+                    <p className="text-sm">{patient.history_of_present_illness}</p>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No history of present illness recorded</p>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Problem List</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {patient.problem_list && patient.problem_list.length > 0 ? (
+                    <ul className="list-disc pl-4">
+                      {patient.problem_list.map((p, i) => (
+                        <li key={i} className="text-sm">{p}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No problems recorded</p>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Admitting Diagnosis</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm">{patient.admitting_diagnosis || "No admitting diagnosis"}</p>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Past Medical History & Personal/Social History */}
+            <div className="grid md:grid-cols-2 gap-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Past Medical History</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {renderJsonData(patient.past_medical_history)}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Personal & Social History</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {renderJsonData(patient.personal_social_history)}
+                </CardContent>
+              </Card>
+            </div>
+
             {/* Current Medications */}
             <Card>
               <CardHeader>
                 <CardTitle>Current Medications</CardTitle>
               </CardHeader>
               <CardContent>
-                {medications.length > 0 ? (
+                {((patient.current_medications && patient.current_medications.length > 0) || medications.length > 0) ? (
                   <div className="space-y-2">
-                    {medications.slice(0, 5).map((med) => (
-                      <div key={med.id} className="flex justify-between items-start border-b pb-2">
-                        <div>
-                          <p className="font-medium">{med.medication_name}</p>
-                          <p className="text-sm text-muted-foreground">
-                            {med.dosage} - {med.frequency} - {med.route}
-                          </p>
+                    {patient.current_medications && patient.current_medications.length > 0 ? (
+                      patient.current_medications.map((m: any, i: number) => (
+                        <div key={`pmed-${i}`} className="flex justify-between items-start border-b pb-2">
+                          <div>
+                            <p className="font-medium">{typeof m === 'string' ? m : m.medication_name || JSON.stringify(m)}</p>
+                          </div>
                         </div>
-                        <Badge variant="outline">{format(new Date(med.start_date), "MMM d")}</Badge>
-                      </div>
-                    ))}
+                      ))
+                    ) : (
+                      medications.slice(0, 5).map((med) => (
+                        <div key={med.id} className="flex justify-between items-start border-b pb-2">
+                          <div>
+                            <p className="font-medium">{med.medication_name}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {med.dosage} - {med.frequency} - {med.route}
+                            </p>
+                          </div>
+                          <Badge variant="outline">{format(new Date(med.start_date), "MMM d")}</Badge>
+                        </div>
+                      ))
+                    )}
                   </div>
                 ) : (
                   <p className="text-sm text-muted-foreground">No medications recorded</p>

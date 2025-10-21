@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { useTheme } from "next-themes";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -14,8 +13,6 @@ import { ChangePassword } from "@/components/ChangePassword";
 
 const Settings = () => {
   const [userRole, setUserRole] = useState<string | null>(null);
-  const { theme, setTheme } = useTheme();
-  const [isDark, setIsDark] = useState<boolean>(theme === "dark");
 
   useEffect(() => {
     fetchUserRole();
@@ -36,15 +33,6 @@ const Settings = () => {
     } catch (error) {
       console.error("Error fetching role:", error);
     }
-  };
-
-  useEffect(() => {
-    setIsDark(theme === "dark");
-  }, [theme]);
-
-  const toggleDark = (value?: boolean) => {
-    const next = value === undefined ? !isDark : value;
-    setTheme(next ? "dark" : "light");
   };
 
   return (
@@ -112,7 +100,7 @@ const Settings = () => {
                   <Label>Email Notifications</Label>
                   <p className="text-sm text-muted-foreground">Receive notifications via email</p>
                 </div>
-                <Switch checked={isDark} onCheckedChange={(v) => toggleDark(v)} />
+                <Switch />
               </div>
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
