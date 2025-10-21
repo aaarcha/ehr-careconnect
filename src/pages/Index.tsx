@@ -8,11 +8,11 @@ const Index = () => {
   const navigate = useNavigate();
 
   return (
-    <div className="min-h-screen bg-gradient-animated bg-[length:200%_200%] animate-gradient-shift">
+    <div className="min-h-screen bg-green-dominant-gradient bg-[length:300%_300%] animate-gradient-shift-slow">
       {/* Hero Section */}
       <div className="container mx-auto px-4 py-16">
         <div className="text-center space-y-8 animate-fade-in">
-          <div className="mx-auto w-32 h-32">
+          <div className="mx-auto w-32 h-32 rounded-full overflow-hidden">
             <img
               src={logoImage}
               alt="CareConnect Logo"
@@ -54,6 +54,12 @@ const Index = () => {
               We are proud to provide a seamless, secure, and innovative electronic health record (EHR) system
               designed to connect healthcare professionals, patients, and information in one trusted digital space.
             </p>
+            <p className="text-lg text-foreground/80 leading-relaxed">
+            At CareConnect, we believe that every click brings care closer - empowering providers to make
+            informed decisions, improving communication across teams, and ensuring patients receive the
+            quality care they deserve.
+            Together, we revolutionize healthcare by connecting people, information, and compassion.
+            </p>
           </div>
 
           <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto mt-16">
@@ -84,6 +90,44 @@ const Index = () => {
               <h3 className="text-xl font-semibold">Patient-Centered</h3>
               <p className="text-muted-foreground">
                 Designed with both healthcare providers and patients in mind
+              </p>
+            </div>
+          </div>
+
+          <div className="text-center space-y-4 max-w-3xl mx-auto pt-16">
+            <h2 className="text-4xl font-bold text-primary">Our Commitment to You</h2>
+          </div>
+
+          <div className="max-w-4xl mx-auto pt-16 space-y-12 border-t border-primary/20">
+            <div className="space-y-4">
+              <h3 className="text-3xl font-bold text-green-700">VISION</h3>
+              <p className="text-lg text-foreground/80 leading-relaxed">
+                To revolutionize healthcare by connecting people, information, and compassion through a seamless digital platform that inspires trust and improves lives.
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              <h3 className="text-3xl font-bold text-green-700">MISSION</h3>
+              <div className="text-lg text-foreground/80 leading-relaxed space-y-4">
+                <p>
+                  CareConnect is dedicated to enhancing the quality of healthcare through innovation, collaboration, and compassion.
+                </p>
+                <p className="font-semibold text-foreground">
+                  We aim to:
+                </p>
+                <ul className="list-disc pl-8 mt-2 space-y-2 text-base text-foreground/70">
+                  <li>Empower healthcare professionals with accurate, real-time information for better clinical decisions.</li>
+                  <li>Strengthen communication between patients and providers through an integrated and user-friendly system.</li>
+                  <li>Safeguard data privacy and uphold the highest standards of security and integrity.</li>
+                  <li>Continuously innovate to create meaningful digital solutions that improve patient outcomes and experiences.</li>
+                </ul>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <h3 className="text-3xl font-bold text-green-700">WHY CHOOSE US</h3>
+              <p className="text-lg text-foreground/80 leading-relaxed">
+                At CareConnect, we go beyond digital records - we build connections that care. Our system is designed with healthcare professionals and patients in mind, combining innovation, reliability, and compassion in every feature.
               </p>
             </div>
           </div>
