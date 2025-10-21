@@ -222,8 +222,8 @@ export function AppSidebar() {
               <DropdownMenuSeparator />
               {userName ? (
                 <DropdownMenuItem onSelect={handleLogout}>
-                  <LogOut className="h-4 w-4 mr-2" />
-                  Sign out
+                  <LogOut className="h-4 w-4 mr-2 text-red-600" />
+                    <span className="text-red-600">Sign out</span>
                 </DropdownMenuItem>
               ) : (
                 <DropdownMenuItem onSelect={() => navigate('/auth')}>Sign in</DropdownMenuItem>
