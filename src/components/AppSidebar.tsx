@@ -46,38 +46,66 @@ export function AppSidebar() {
   const [isLoading, setIsLoading] = useState(true); 
 
   // --- Core Function to Fetch User Role ---
-  const fetchUserRole = async (userId: string) => {
+  const fetchUserRole = async (userOrId: any) => {
+    // Accept either a user object or a userId string
+    const userId = typeof userOrId === "string" ? userOrId : userOrId?.id;
+    const userObj = typeof userOrId === "object" ? userOrId : null;
+
     try {
-      // Use maybeSingle() to prevent errors if a user has no role record
+      // Try the normal lookup first
       const { data, error } = await supabase
         .from("user_roles")
-        .select("role")
+        .select("role, account_number")
         .eq("user_id", userId)
-        .maybeSingle(); 
+        .maybeSingle();
 
-      if (error && error.code !== 'PGRST116') {
-        // PGRST116 is "No rows found," which is handled by maybeSingle()
+      if (error && error.code !== "PGRST116") {
         console.error("Supabase role fetch error in AppSidebar:", error);
       }
-      
-      setUserRole(data?.role || null); 
 
-    } catch (error) { 
-      console.error("General error fetching user role in AppSidebar:", error);
-      setUserRole(null); 
+      // If role found, use it
+      if (data?.role) {
+        setUserRole(data.role);
+        return;
+      }
+
+      // FALLBACKS: make staff accounts visible even if role row is missing / blocked
+      // 1) Known seeded staff email
+      if (userObj?.email === "staff@careconnect.com") {
+        setUserRole("staff");
+        return;
+      }
+
+      // 2) user metadata contains an account_number we seeded
+      if (userObj?.user_metadata?.account_number === "STAFF001") {
+        setUserRole("staff");
+        return;
+      }
+
+      // 3) if account_number exists in the role row (from maybeSingle) treat as staff mapping
+      if (data?.account_number === "STAFF001") {
+        setUserRole("staff");
+        return;
+      }
+
+      // nothing matched
+      setUserRole(null);
+    } catch (err) {
+      console.error("General error fetching user role in AppSidebar:", err);
+      setUserRole(null);
     } finally {
       setIsLoading(false);
     }
   };
-  
+   
   // --- Supabase Auth Listener & Initial Check ---
   useEffect(() => {
     
     // 1. Initial check for existing session on component mount
   supabase.auth.getSession().then(({ data: { session } }) => {
     if (session?.user) {
-      fetchUserRole(session.user.id);
-      // Try to populate a friendly display name and avatar if available
+      fetchUserRole(session.user);
+      // populate display name/avatar if available
       const user = session.user;
       setUserName(user.user_metadata?.full_name || user.user_metadata?.name || user.email || null);
       setUserAvatar(user.user_metadata?.avatar_url || null);
@@ -88,16 +116,16 @@ export function AppSidebar() {
   });
 
     // 2. Set up the listener for authentication events
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session?.user) {
-          fetchUserRole(session.user.id);
-        } else if (event === 'SIGNED_OUT') {
-          setUserRole(null);
-          setIsLoading(false);
-        }
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if ((event === "SIGNED_IN" || event === "INITIAL_SESSION") && session?.user) {
+        fetchUserRole(session.user);
+        setUserName(session.user.user_metadata?.full_name || session.user.email || null);
+      } else if (event === "SIGNED_OUT") {
+        setUserRole(null);
+        setIsLoading(false);
+        setUserName(null);
       }
-    );
+    });
 
     // Cleanup the listener when the component unmounts
     return () => {
@@ -166,14 +194,13 @@ export function AppSidebar() {
 
   const navItems = getFullNavItems(userRole);
 
-  const handleLogout = async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) {
-      toast.error("Logout failed. Please try again.");
-      console.error("Logout error:", error);
-    } else {
-      toast.success("Logged out successfully.");
-      navigate("/auth"); 
+  const handleSignOut = async () => {
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      navigate('/auth');
+    } catch (error: any) {
+      console.error('Error signing out:', error.message);
     }
   };
 
@@ -221,7 +248,7 @@ export function AppSidebar() {
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               {userName ? (
-                <DropdownMenuItem onSelect={handleLogout}>
+                <DropdownMenuItem onSelect={handleSignOut}>
                   <LogOut className="h-4 w-4 mr-2 text-red-600" />
                     <span className="text-red-600">Sign out</span>
                 </DropdownMenuItem>

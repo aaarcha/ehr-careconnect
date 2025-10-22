@@ -111,6 +111,7 @@ interface AssessmentFormState {
 
 interface PhysicalAssessment {
   id: string;
+  patient_id: string;
   assessment_date: string;
   skin_assessment: {
     color: string;
@@ -303,7 +304,8 @@ const EditPatientDialog = ({
       setLoading(true);
       
       const assessment: PhysicalAssessment = {
-        id: crypto.randomUUID(),
+        id: crypto.randomUUID() as `${string}-${string}-${string}-${string}-${string}`,
+        patient_id: patient.id,
         assessment_date: new Date().toISOString(),
         skin_assessment: {
           color: assessmentForm.skinColor,
@@ -370,7 +372,7 @@ const EditPatientDialog = ({
 
       const { error } = await supabase
         .from('physical_assessments')
-        .insert([{ ...assessment, patient_id: id }]);
+        .insert([{ ...assessment, patient_id: patient.id }]);
 
       if (error) throw error;
 
@@ -1424,7 +1426,7 @@ const EditPatientDialog = ({
 };
 
 const PatientRecord = () => {
-  const { id } = useParams();
+  const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [patient, setPatient] = useState<Patient | null>(null);
   const [physicalAssessments, setPhysicalAssessments] = useState<PhysicalAssessment[]>([]);
@@ -1560,45 +1562,83 @@ const PatientRecord = () => {
   };
 
   const fetchPatientData = async () => {
-    try {
-      setLoading(true);
+  try {
+    setLoading(true);
 
-      // Fetch patient details
-      const { data: patientData, error: patientError } = await supabase
-        .from("patients")
-        .select("*")
-        .eq("id", id)
-        .single();
+    // 1. CRITICAL FIX: Fetch main patient data using a simple select('*').
+    // This isolates the core record fetch, preventing complex joins from causing a failure.
+    const { data: patientData, error: patientError } = await supabase
+      .from("patients")
+      .select("*") // SIMPLIFIED: Only fetch patient fields to ensure RLS success.
+      .eq("id", id)
+      .single();
 
-      if (patientError) throw patientError;
-      setPatient(patientData);
-
-      // Fetch all related data
-      const [assessments, vitals, meds, labsData, imagingData, doctorsData] = await Promise.all([
-        supabase.from("physical_assessments").select("*").eq("patient_id", id).order("assessment_date", { ascending: false }),
-        supabase.from("patient_vital_signs").select("*").eq("patient_id", id).order("recorded_at", { ascending: false }).limit(5),
-        supabase.from("patient_medications").select("*").eq("patient_id", id).order("start_date", { ascending: false }),
-        supabase.from("patient_labs").select("*").eq("patient_id", id).order("test_date", { ascending: false }).limit(5),
-        supabase.from("patient_imaging").select("*").eq("patient_id", id).order("imaging_date", { ascending: false }).limit(5),
-        supabase.from("doctors").select("*").order("name", { ascending: true })
-      ]);
-
-      setPhysicalAssessments(assessments.data || []);
-      setVitalSigns(vitals.data || []);
-      setMedications(meds.data || []);
-      setLabs(labsData.data || []);
-      setImaging(imagingData.data || []);
-      setDoctors(doctorsData.data || []);
-      
-      if (patientData.attending_physician_id) {
-        setSelectedDoctorId(patientData.attending_physician_id);
-      }
-    } catch (error: any) {
-      toast.error("Error loading patient data: " + error.message);
-    } finally {
-      setLoading(false);
+    if (patientError) {
+      throw patientError;
     }
-  };
+
+    setPatient(patientData);
+
+    // 2. Fetch all related data in parallel (This section looks correct based on your file)
+    const [assessments, vitals, meds, labsData, imagingData, doctorsData] = await Promise.all([
+      supabase.from("physical_assessments").select("*").eq("patient_id", id).order("assessment_date", { ascending: false }),
+      supabase.from("patient_vital_signs").select("*").eq("patient_id", id).order("recorded_at", { ascending: false }).limit(5),
+      supabase.from("patient_medications").select("*").eq("patient_id", id).order("start_date", { ascending: false }),
+      supabase.from("patient_labs").select("*").eq("patient_id", id).order("test_date", { ascending: false }).limit(5),
+      supabase.from("patient_imaging").select("*").eq("patient_id", id).order("imaging_date", { ascending: false }).limit(5),
+      supabase.from("doctors").select("*").order("name", { ascending: true })
+    ]);
+
+    setPhysicalAssessments(assessments.data?.map(assessment => ({
+      ...assessment,
+      skin_assessment: typeof assessment.skin_assessment === 'string' 
+        ? JSON.parse(assessment.skin_assessment)
+        : assessment.skin_assessment,
+      eent_assessment: typeof assessment.eent_assessment === 'string'
+        ? JSON.parse(assessment.eent_assessment)
+        : assessment.eent_assessment,
+      cardiovascular_assessment: typeof assessment.cardiovascular_assessment === 'string'
+        ? JSON.parse(assessment.cardiovascular_assessment)
+        : assessment.cardiovascular_assessment,
+      respiratory_assessment: typeof assessment.respiratory_assessment === 'string'
+        ? JSON.parse(assessment.respiratory_assessment)
+        : assessment.respiratory_assessment,
+      gastrointestinal_assessment: typeof assessment.gastrointestinal_assessment === 'string'
+        ? JSON.parse(assessment.gastrointestinal_assessment)
+        : assessment.gastrointestinal_assessment,
+      genitourinary_assessment: typeof assessment.genitourinary_assessment === 'string'
+        ? JSON.parse(assessment.genitourinary_assessment)
+        : assessment.genitourinary_assessment,
+      musculoskeletal_assessment: typeof assessment.musculoskeletal_assessment === 'string'
+        ? JSON.parse(assessment.musculoskeletal_assessment)
+        : assessment.musculoskeletal_assessment,
+      neurological_assessment: typeof assessment.neurological_assessment === 'string'
+        ? JSON.parse(assessment.neurological_assessment)
+        : assessment.neurological_assessment,
+    })) || []);
+    setVitalSigns(vitals.data || []);
+    setMedications(meds.data || []);
+    setLabs(labsData.data || []);
+    setImaging(imagingData.data || []);
+    setDoctors(doctorsData.data || []);
+
+    if (patientData.attending_physician_id) {
+      setSelectedDoctorId(patientData.attending_physician_id);
+    }
+  } catch (error: any) {
+    // This error toast will now correctly show if the simple patient fetch fails.
+    toast.error("Error loading patient data: " + error.message);
+  } finally {
+    setLoading(false);
+  }
+};
+
+// Don't forget to call this function in your component's useEffect hook
+useEffect(() => {
+  if (id) {
+    fetchPatientData();
+  }
+}, [id]);
 
   // Lab CRUD handlers
   const handleSaveLab = async (isNew: boolean) => {
@@ -1761,9 +1801,10 @@ const PatientRecord = () => {
   };
 
   const handleSaveAssessment = async () => {
+    if (!id) return;
     try {
       const assessmentPayload = {
-        patient_id: id,
+        patient_id: id as string,
         skin_assessment: {
           color: assessmentForm.skinColor,
           texture: assessmentForm.skinTexture,

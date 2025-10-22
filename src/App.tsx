@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
@@ -31,21 +31,23 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/auth" element={<Auth />} />
-          <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>}>
+          <Route path="/dashboard" element={
+            <ProtectedRoute>
+              <Dashboard />
+            </ProtectedRoute>
+          }>
             <Route index element={<Home />} />
-            <Route path="decking" element={<Decking />} />
-            <Route path="nurses" element={<Nurses />} />
-            <Route path="laboratory" element={<Laboratory />} />
-            <Route path="imaging" element={<Imaging />} />
             <Route path="patients" element={<Patients />} />
             <Route path="patients/:id" element={<PatientRecord />} />
             <Route path="add-patient" element={<AddPatient />} />
+            <Route path="nurses" element={<Nurses />} />
+            <Route path="laboratory" element={<Laboratory />} />
+            <Route path="imaging" element={<Imaging />} />
             <Route path="settings" element={<Settings />} />
+            <Route path="decking" element={<Decking />} />
             <Route path="messages" element={<Messages />} />
-            <Route path="help" element={<HelpSupport />} />
           </Route>
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-          <Route path="*" element={<NotFound />} />
+          <Route path="*" element={<Navigate to="/auth" replace />} />
         </Routes>
       </BrowserRouter>
     </TooltipProvider>

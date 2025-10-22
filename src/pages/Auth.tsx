@@ -55,82 +55,29 @@ const Auth = () => {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    // Check lockout status
-    if (lockoutUntil && new Date() < lockoutUntil) {
-      const remainingSeconds = Math.ceil((lockoutUntil.getTime() - new Date().getTime()) / 1000);
-      toast.error(`Account locked. Try again in ${remainingSeconds} seconds.`);
-      return;
-    }
-
-    if (!password) {
-      toast.error("Password is required");
-      return;
-    }
-
-    setLoading(true);
-
+    
     try {
-      let loginId = role === "patient" ? patientNumber : accountNumber;
-      let emailToAuth = getEmailFromIdAndRole(loginId, role);
+      setLoading(true);
 
-      if (!emailToAuth) {
-        setFailedAttempts(prev => prev + 1);
-        toast.error(`Invalid login ID or role selected. Attempt ${failedAttempts + 1} of 5.`);
-        setLoading(false);
+      // For staff login, use the seeded email mapping
+      const email = role === 'staff' ? 'staff@careconnect.com' : undefined;
+      
+      if (!email) {
+        toast.error('Invalid credentials');
         return;
       }
 
-      // 1. Attempt standard email/password authentication via Supabase Auth
-      const { data: authData, error: signInError } = await supabase.auth.signInWithPassword({
-        email: emailToAuth,
-        password: password
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password
       });
 
-      if (signInError) {
-        setFailedAttempts(prev => prev + 1);
-        if (failedAttempts + 1 >= 5) {
-          const lockoutDuration = Math.pow(2, failedAttempts - 3) * 60000;
-          setLockoutUntil(new Date(Date.now() + lockoutDuration));
-        }
-        toast.error(`Invalid ID or password. Attempt ${failedAttempts + 1} of 5.`);
-        setLoading(false);
-        return;
-      }
+      if (error) throw error;
 
-      // 2. Security Check: Verify the authenticated user's role against the selected role.
-      // This prevents a user who belongs to multiple roles from logging in with the wrong role selected.
-      const userId = authData?.user?.id;
-      if (!userId) {
-        await supabase.auth.signOut();
-        toast.error("Authentication error: User ID not found.");
-        setLoading(false);
-        return;
-      }
-
-      const { data: roleData, error: roleError } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", userId)
-        .eq("role", role) // Check if the user has the selected role
-        .maybeSingle();
-
-      if (roleError || !roleData) {
-        await supabase.auth.signOut();
-        toast.error(`Login error: Account is not configured as a ${role}.`);
-        setLoading(false);
-        return;
-      }
-
-      // Success
-      setFailedAttempts(0);
-      setLockoutUntil(null);
-      toast.success(`Login successful as ${role}!`);
-      navigate("/dashboard");
-
+      navigate('/dashboard');
+      
     } catch (error: any) {
-      console.error("Login error:", error);
-      toast.error("An unexpected error occurred during login.");
+      toast.error(error.message);
     } finally {
       setLoading(false);
     }

@@ -138,7 +138,11 @@ const Patients = () => {
               <TableCell>{format(new Date(patient.created_at), "MMM d, yyyy")}</TableCell>
               <TableCell className="text-right">
                 <div className="flex justify-end gap-2">
-                  <Button size="sm" variant="ghost" onClick={() => handleViewPatient(patient)}>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => navigate(`/dashboard/patients/${patient.id}`)}
+                  >
                     <Eye className="h-4 w-4" />
                   </Button>
                   {!showArchive && (

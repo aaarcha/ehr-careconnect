@@ -5,7 +5,7 @@
  */
 export const sanitizeError = (error: any): string => {
   // Development mode: show full errors for debugging
-  if (import.meta.env.DEV) {
+  if (process.env.NODE_ENV === 'development') {
     console.error('Full error details:', error);
     return error.message || 'An error occurred';
   }
