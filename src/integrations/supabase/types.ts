@@ -470,7 +470,7 @@ export type Database = {
           discharge_diagnosis: string | null
           family_history: Json | null
           height: number | null
-          history_present_illness: string | null
+          history_of_present_illness: string | null
           hospital_number: string
           id: string
           name: string
@@ -511,7 +511,7 @@ export type Database = {
           discharge_diagnosis?: string | null
           family_history?: Json | null
           height?: number | null
-          history_present_illness?: string | null
+          history_of_present_illness?: string | null
           hospital_number: string
           id?: string
           name: string
@@ -552,7 +552,7 @@ export type Database = {
           discharge_diagnosis?: string | null
           family_history?: Json | null
           height?: number | null
-          history_present_illness?: string | null
+          history_of_present_illness?: string | null
           hospital_number?: string
           id?: string
           name?: string

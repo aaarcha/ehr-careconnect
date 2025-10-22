@@ -181,7 +181,7 @@ interface Lab {
   patient_id: string;
   test_date: string;
   test_name: string;
-  test_result: string;
+  test_result: string;  // changed from number to string to match DB
   reference_range?: string;
   remarks?: string;
   created_at: string;
@@ -193,7 +193,7 @@ interface Imaging {
   imaging_date: string;
   imaging_type: string;
   findings: string;
-  recommendation?: string;
+  recommendation?: string;  // matches DB column name exactly
   image_url?: string;
   created_at: string;
 }
@@ -2358,9 +2358,10 @@ useEffect(() => {
                     <Label>Joint swelling present</Label>
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <Label>Additional Notes</Label>
+                <div className="space-y-2 mt-4">
+                  <Label htmlFor="musculoskeletalNotes">Additional Notes</Label>
                   <Textarea
+                    id="musculoskeletalNotes"
                     value={assessmentForm.musculoskeletalNotes}
                     onChange={(e) => setAssessmentForm({ ...assessmentForm, musculoskeletalNotes: e.target.value })}
                     rows={3}
@@ -2427,9 +2428,10 @@ useEffect(() => {
                     />
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <Label>Additional Notes</Label>
+                <div className="space-y-2 mt-4">
+                  <Label htmlFor="neurologicalNotes">Additional Notes</Label>
                   <Textarea
+                    id="neurologicalNotes"
                     value={assessmentForm.neurologicalNotes}
                     onChange={(e) => setAssessmentForm({ ...assessmentForm, neurologicalNotes: e.target.value })}
                     rows={3}
