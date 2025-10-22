@@ -28,6 +28,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useEffect, useState } from "react";
 import logoImage from "@/assets/CareConnectLogo.jpg";
+import { cn } from "@/lib/utils";
 
 // Define the structure for a navigation item
 interface NavItem {
@@ -242,7 +243,7 @@ export function AppSidebar() {
                 <Settings className="h-4 w-4 mr-2" />
                 Settings
               </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => navigate('/dashboard/help')}>
+              <DropdownMenuItem onSelect={() => navigate('/dashboard/help-support')}>  {/* Changed from /dashboard/help */}
                 <HelpCircle className="h-4 w-4 mr-2" />
                 Help
               </DropdownMenuItem>

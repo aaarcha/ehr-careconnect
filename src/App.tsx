@@ -22,36 +22,39 @@ import ProtectedRoute from "./components/ProtectedRoute";
 
 const queryClient = new QueryClient();
 
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Index />} />
-          <Route path="/auth" element={<Auth />} />
-          <Route path="/dashboard" element={
-            <ProtectedRoute>
-              <Dashboard />
-            </ProtectedRoute>
-          }>
-            <Route index element={<Home />} />
-            <Route path="patients" element={<Patients />} />
-            <Route path="patients/:id" element={<PatientRecord />} />
-            <Route path="add-patient" element={<AddPatient />} />
-            <Route path="nurses" element={<Nurses />} />
-            <Route path="laboratory" element={<Laboratory />} />
-            <Route path="imaging" element={<Imaging />} />
-            <Route path="settings" element={<Settings />} />
-            <Route path="decking" element={<Decking />} />
-            <Route path="messages" element={<Messages />} />
-          </Route>
-          <Route path="*" element={<Navigate to="/auth" replace />} />
-        </Routes>
-      </BrowserRouter>
-    </TooltipProvider>
-  </QueryClientProvider>
-);
+function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <Routes>
+            <Route path="/" element={<Index />} />
+            <Route path="/auth" element={<Auth />} />
+            <Route path="/dashboard" element={
+              <ProtectedRoute>
+                <Dashboard />
+              </ProtectedRoute>
+            }>
+              <Route index element={<Home />} />
+              <Route path="patients" element={<Patients />} />
+              <Route path="patients/:id" element={<PatientRecord />} />
+              <Route path="add-patient" element={<AddPatient />} />
+              <Route path="nurses" element={<Nurses />} />
+              <Route path="laboratory" element={<Laboratory />} />
+              <Route path="imaging" element={<Imaging />} />
+              <Route path="settings" element={<Settings />} />
+              <Route path="decking" element={<Decking />} />
+              <Route path="messages" element={<Messages />} />
+              <Route path="help-support" element={<HelpSupport />} />
+            </Route>
+            <Route path="*" element={<Navigate to="/auth" replace />} />
+          </Routes>
+        </BrowserRouter>
+      </TooltipProvider>
+    </QueryClientProvider>
+  );
+}
 
 export default App;
