@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { MessageSquare, Send, Search } from "lucide-react";
+import { MessageSquare, Send, Search, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { sanitizeError } from "@/lib/errorHandling";
@@ -182,9 +182,41 @@ export default function Messages(): JSX.Element {
       }
 
       void fetchMessages();
+      void fetchUsers(); // Added to refresh recipient list
     } catch (err) {
       console.error("sendMessage error", err);
       toast.error(sanitizeError(err as any));
+    }
+  }
+  
+  // NEW FUNCTION: Delete all messages in the current conversation thread
+  async function deleteConversation() {
+    if (!selectedMessage || !currentUserId) return;
+
+    if (!window.confirm("Are you sure you want to delete this entire conversation? This action cannot be undone.")) {
+      return;
+    }
+
+    const partnerId = selectedMessage.sender_id === currentUserId
+      ? selectedMessage.recipient_id
+      : selectedMessage.sender_id;
+
+    try {
+      // Deletes all messages where the pair of sender/recipient IDs match
+      const { error } = await supabase.from("messages")
+        .delete()
+        .or(`and(sender_id.eq.${currentUserId},recipient_id.eq.${partnerId}),and(sender_id.eq.${partnerId},recipient_id.eq.${currentUserId})`);
+
+      if (error) throw error;
+
+      toast.success("Conversation deleted successfully.");
+      setSelectedMessage(null); // Return to the new message screen
+      setMessageText("");
+      setMessageSubject("");
+      void fetchMessages(); // Refresh the conversation list
+    } catch (err) {
+      console.error("deleteConversation error", err);
+      toast.error("Failed to delete conversation.");
     }
   }
 
@@ -301,21 +333,35 @@ export default function Messages(): JSX.Element {
 
         <Card className="lg:col-span-2 flex flex-col">
           <CardHeader className="flex-shrink-0">
-            <CardTitle className="flex items-center gap-2">
+            <CardTitle className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                {selectedMessage && (
+                  <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      onClick={() => setSelectedMessage(null)}
+                      aria-label="New Message"
+                  >
+                      &larr;
+                  </Button>
+                )}
+                {selectedMessage 
+                  ? `Conversation with ${getUserLabel(selectedMessage.sender_id === currentUserId ? selectedMessage.recipient_id : selectedMessage.sender_id)}` 
+                  : "New Message"
+                }
+              </div>
+              
+              {/* DELETE BUTTON */}
               {selectedMessage && (
                 <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    onClick={() => setSelectedMessage(null)}
-                    aria-label="New Message"
+                  variant="destructive" 
+                  size="icon" 
+                  onClick={deleteConversation}
+                  aria-label="Delete Conversation"
                 >
-                    &larr;
+                  <Trash2 className="h-4 w-4" />
                 </Button>
               )}
-              {selectedMessage 
-                ? `Conversation with ${getUserLabel(selectedMessage.sender_id === currentUserId ? selectedMessage.recipient_id : selectedMessage.sender_id)}` 
-                : "New Message"
-              }
             </CardTitle>
           </CardHeader>
           
