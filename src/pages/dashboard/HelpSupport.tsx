@@ -6,10 +6,45 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { HelpCircle, Mail, Phone, MessageCircle, Book } from "lucide-react";
+import { useState } from "react";
+import { AIChat } from "@/components/ui/ai-chat";
 
 const HelpSupport = () => {
+  const [ticketForm, setTicketForm] = useState({
+    subject: '',
+    category: '',
+    description: ''
+  });
+  const [showAIChat, setShowAIChat] = useState(false);
+
+  const handleInputChange = (field: keyof typeof ticketForm, value: string) => {
+    setTicketForm(prev => ({ ...prev, [field]: value }));
+  };
+
   const handleSubmitTicket = () => {
-    toast.success("Support ticket submitted successfully");
+    const mailtoUrl = constructMailtoUrl();
+    window.location.href = mailtoUrl;
+    toast.success("Opening email client...");
+  };
+
+  const constructMailtoUrl = () => {
+    const email = 'careconnectad@gmail.com';
+    const subject = encodeURIComponent(ticketForm.subject);
+    const body = encodeURIComponent(`
+Category: ${ticketForm.category}
+
+Description:
+${ticketForm.description}
+
+---
+This support ticket was submitted through CareConnect Help & Support.
+    `);
+
+    return `mailto:${email}?subject=${subject}&body=${body}`;
+  };
+
+  const handleEmailSupport = () => {
+    window.location.href = 'mailto:careconnectad@gmail.com?subject=Support Request';
   };
 
   return (
@@ -31,9 +66,9 @@ const HelpSupport = () => {
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground mb-4">
-              support@careconnect.com
+              careconnectad@gmail.com
             </p>
-            <Button variant="outline" className="w-full">Send Email</Button>
+            <Button variant="outline" className="w-full" onClick={handleEmailSupport}>Send Email</Button>
           </CardContent>
         </Card>
 
@@ -56,14 +91,24 @@ const HelpSupport = () => {
           <CardHeader>
             <MessageCircle className="h-8 w-8 text-primary mb-2" />
             <CardTitle>Live Chat</CardTitle>
-            <CardDescription>Chat with our support team</CardDescription>
+            <CardDescription>Chat with our AI assistant</CardDescription>
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground mb-4">
-              Available 24/7
+              AI Support available 24/7. Human support during business hours.
             </p>
-            <Button variant="outline" className="w-full">Start Chat</Button>
+            <Button variant="outline" className="w-full" onClick={() => setShowAIChat(true)}>Start Chat</Button>
           </CardContent>
+
+          <AIChat 
+            open={showAIChat}
+            onOpenChange={setShowAIChat}
+            onEscalateToHuman={() => {
+              setShowAIChat(false);
+              handleEmailSupport();
+              toast.info("Connecting you with a human support agent via email...");
+            }}
+          />
         </Card>
       </div>
 
@@ -119,11 +164,21 @@ const HelpSupport = () => {
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="subject">Subject</Label>
-              <Input id="subject" placeholder="Brief description of your issue" />
+              <Input 
+                id="subject" 
+                placeholder="Brief description of your issue"
+                value={ticketForm.subject}
+                onChange={(e) => handleInputChange('subject', e.target.value)}
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="category">Category</Label>
-              <Input id="category" placeholder="e.g., Technical, Account, General" />
+              <Input 
+                id="category" 
+                placeholder="e.g., Technical, Account, General"
+                value={ticketForm.category}
+                onChange={(e) => handleInputChange('category', e.target.value)}
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="description">Description</Label>
@@ -131,6 +186,8 @@ const HelpSupport = () => {
                 id="description"
                 placeholder="Please provide detailed information about your issue..."
                 className="min-h-[120px]"
+                value={ticketForm.description}
+                onChange={(e) => handleInputChange('description', e.target.value)}
               />
             </div>
             <Button onClick={handleSubmitTicket} className="w-full">
