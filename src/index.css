@@ -2,119 +2,93 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
-*/
-
 @layer base {
   :root {
     --background: 0 0% 100%;
-    --foreground: 160 30% 15%;
-
+    --foreground: 240 10% 3.9%;
     --card: 0 0% 100%;
-    --card-foreground: 160 30% 15%;
-
+    --card-foreground: 240 10% 3.9%;
     --popover: 0 0% 100%;
-    --popover-foreground: 160 30% 15%;
-
-    --primary: 160 65% 35%;
-    --primary-foreground: 0 0% 100%;
-    --primary-glow: 160 70% 45%;
-
-    --secondary: 160 30% 90%;
-    --secondary-foreground: 160 65% 25%;
-
-    --muted: 160 20% 95%;
-    --muted-foreground: 160 15% 45%;
-
-    --accent: 140 60% 50%;
-    --accent-foreground: 0 0% 100%;
-
+    --popover-foreground: 240 10% 3.9%;
+    --primary: 142.1 76.2% 36.3%;
+    --primary-foreground: 355.7 100% 97.3%;
+    --primary-glow: 142.1 76.2% 36.3%;
+    --secondary: 240 4.8% 95.9%;
+    --secondary-foreground: 240 5.9% 10%;
+    --muted: 240 4.8% 95.9%;
+    --muted-foreground: 240 3.8% 46.1%;
+    --accent: 240 4.8% 95.9%;
+    --accent-foreground: 240 5.9% 10%;
     --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 100%;
-
-    --border: 160 25% 85%;
-    --input: 160 25% 85%;
-    --ring: 160 65% 35%;
-
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 5.9% 90%;
+    --input: 240 5.9% 90%;
+    --ring: 142.1 76.2% 36.3%;
     --radius: 0.5rem;
 
-    --sidebar-background: 160 70% 15%;
-    --sidebar-foreground: 160 20% 95%;
-    --sidebar-primary: 160 80% 40%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 160 60% 25%;
-    --sidebar-accent-foreground: 160 20% 95%;
-    --sidebar-border: 160 50% 20%;
-    --sidebar-ring: 160 70% 45%;
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 240 10% 3.9%;
+    --sidebar-primary: 142.1 76.2% 36.3%;
+    --sidebar-primary-foreground: 355.7 100% 97.3%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 240 5.9% 90%;
+    --sidebar-ring: 142.1 76.2% 36.3%;
 
     /* Medical green gradients */
-    --gradient-primary: linear-gradient(135deg, hsl(160 65% 35%), hsl(160 70% 45%));
+    --gradient-primary: linear-gradient(135deg, hsl(142.1 76.2% 36.3%), hsl(142.1 70.6% 45.3%));
     --gradient-animated: linear-gradient(
       -45deg,
-      hsl(140 70% 30%), /* Deep Forest Green */
-      hsl(160 70% 40%),
-      hsl(145 65% 55%), /* Vibrant Jungle Green */
-      hsl(160 70% 40%),
-      hsl(170 75% 35%)  /* Mossy Teal */
+      hsl(140 70% 30%),
+      hsl(142.1 76.2% 36.3%),
+      hsl(145 65% 55%),
+      hsl(142.1 76.2% 36.3%),
+      hsl(170 75% 35%)
     );
-    
-    /* Shadows with medical green tint */
-    --shadow-elegant: 0 10px 30px -10px hsl(160 65% 35% / 0.2);
-    --shadow-glow: 0 0 40px hsl(160 70% 45% / 0.3);
   }
 
   .dark {
-    --background: 160 30% 8%;
-    --foreground: 160 20% 95%;
+    --background: 240 10% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 240 10% 3.9%;
+    --card-foreground: 0 0% 98%;
+    --popover: 240 10% 3.9%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 142.1 70.6% 45.3%;
+    --primary-foreground: 144.9 80.4% 10%;
+    --primary-glow: 142.1 70.6% 45.3%;
+    --secondary: 240 3.7% 15.9%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 240 3.7% 15.9%;
+    --muted-foreground: 240 5% 64.9%;
+    --accent: 240 3.7% 15.9%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 85.7% 97.3%;
+    --border: 240 3.7% 15.9%;
+    --input: 240 3.7% 15.9%;
+    --ring: 142.1 76.2% 36.3%;
 
-    --card: 160 25% 12%;
-    --card-foreground: 160 20% 95%;
+    --sidebar-background: 240 10% 3.9%;
+    --sidebar-foreground: 0 0% 98%;
+    --sidebar-primary: 142.1 70.6% 45.3%;
+    --sidebar-primary-foreground: 144.9 80.4% 10%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 0 0% 98%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 142.1 70.6% 45.3%;
 
-    --popover: 160 25% 12%;
-    --popover-foreground: 160 20% 95%;
-
-    --primary: 160 70% 45%;
-    --primary-foreground: 160 30% 8%;
-    --primary-glow: 160 75% 55%;
-
-    --secondary: 160 30% 20%;
-    --secondary-foreground: 160 20% 95%;
-
-    --muted: 160 25% 18%;
-    --muted-foreground: 160 15% 60%;
-
-    --accent: 140 65% 55%;
-    --accent-foreground: 160 30% 8%;
-
-    --destructive: 0 62.8% 50%;
-    --destructive-foreground: 160 20% 95%;
-
-    --border: 160 25% 22%;
-    --input: 160 25% 22%;
-    --ring: 160 70% 45%;
-
+    --gradient-primary: linear-gradient(135deg, hsl(142.1 70.6% 45.3%), hsl(142.1 76.2% 36.3%));
     --gradient-animated: linear-gradient(
       -45deg,
       hsl(150 70% 20%), 
-      hsl(160 70% 30%),
+      hsl(142.1 70.6% 45.3%),
       hsl(155 75% 45%), 
-      hsl(160 70% 30%),
-      hsl(170 80% 25%)  
+      hsl(142.1 70.6% 45.3%),
+      hsl(170 80% 25%)
     );
-
-    --sidebar-background: 160 70% 15%;
-    --sidebar-foreground: 160 20% 95%;
-    --sidebar-primary: 160 80% 50%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 160 60% 25%;
-    --sidebar-accent-foreground: 160 20% 95%;
-    --sidebar-border: 160 50% 20%;
-    --sidebar-ring: 160 75% 55%;
   }
-}
 
-@layer base {
   * {
     @apply border-border;
   }
@@ -124,26 +98,16 @@ All colors MUST be HSL.
   }
 }
 
-/* Custom Green Gradient Class for Tailwind */
-.bg-green-dominant-gradient {
-  background: var(--gradient-animated);
+@layer components {
+  .bg-green-dominant-gradient {
+    background: var(--gradient-animated);
+    background-size: 200% 200%;
+    animation: gradient-shift 15s ease infinite;
+  }
 }
 
-/* Animation Keyframes for the Shifting Gradient */
 @keyframes gradient-shift {
-  0% {
-    background-position: 0% 50%;
-  }
-  50% {
-    background-position: 100% 50%;
-  }
-  100% {
-    background-position: 0% 50%;
-  }
-}
-
-/* Animation Utility Class (Re-defining for a slower speed) */
-.animate-gradient-shift {
-  /* 15s for a slow, elegant shift */
-  animation: gradient-shift 15s ease infinite; 
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
 }

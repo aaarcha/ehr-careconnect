@@ -44,7 +44,11 @@ export function AppSidebar() {
   const [userName, setUserName] = useState<string | null>(null);
   const [userAvatar, setUserAvatar] = useState<string | null>(null);
   // Start in loading state until session is checked or listener fires
-  const [isLoading, setIsLoading] = useState(true); 
+  const [isLoading, setIsLoading] = useState(true);
+
+  // CSS Classes for dark mode compatibility
+  const sidebarClasses = "bg-background border-r border-border dark:bg-zinc-900 dark:border-zinc-800";
+  const menuItemClasses = "dark:hover:bg-zinc-800 dark:text-zinc-200"; 
 
   // --- Core Function to Fetch User Role ---
   const fetchUserRole = async (userOrId: any) => {
@@ -208,24 +212,24 @@ export function AppSidebar() {
   return (
     <>
       {/* Fixed top header shown on every page */}
-      <header className="fixed top-0 left-0 right-0 z-50 h-14 bg-white border-b border-gray-200 flex items-center px-4">
+      <header className="fixed top-0 left-0 right-0 z-50 h-14 bg-background border-b border-border dark:bg-zinc-900 dark:border-zinc-800 flex items-center px-4">
         <button
           aria-label="Toggle sidebar"
           title="Toggle sidebar"
           onClick={toggleSidebar}
-          className="inline-flex h-10 w-10 items-center justify-center rounded-md text-foreground hover:scale-105 transition-transform"
+          className="inline-flex h-10 w-10 items-center justify-center rounded-md text-foreground hover:scale-105 transition-transform dark:text-white"
         >
           <Menu className="h-5 w-5" />
         </button>
 
         <div className="flex items-center gap-3 ml-3">
           <img src={logoImage} alt="CareConnect logo" className="h-10 w-10 rounded-full object-cover" />
-          <span className="font-semibold text-lg">CareConnect</span>
+          <span className="font-semibold text-lg text-foreground dark:text-white">CareConnect</span>
         </div>
 
         {/* User menu in header (upper-right) */}
         <div className="ml-auto flex items-center gap-3">
-          <span className="text-sm font-medium text-gray-700">{userName || 'Sign in'}</span>
+          <span className="text-sm font-medium text-foreground dark:text-zinc-200">{userName || 'Sign in'}</span>
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -234,7 +238,7 @@ export function AppSidebar() {
                 aria-label="Open user menu"
               >
                 <span className="sr-only">Open user menu</span>
-                <User className="h-4 w-4 text-gray-700 group-hover:text-white" />
+                <User className="h-4 w-4 text-foreground dark:text-zinc-200 group-hover:text-white" />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent side="bottom" align="end">
