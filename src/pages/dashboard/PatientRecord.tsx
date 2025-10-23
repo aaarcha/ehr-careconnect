@@ -68,6 +68,7 @@ interface FamilyHistory {
 interface Patient {
   id: string;
   hospital_number: string;
+  patient_number?: string
   name: string;
   age: number;
   sex: string;
@@ -1681,7 +1682,7 @@ const PatientRecord = () => {
                 {patient.status.charAt(0).toUpperCase() + patient.status.slice(1)}
               </Badge>
             </div>
-            <p className="text-lg text-muted-foreground">Hospital No: {patient.hospital_number}</p>
+            <p className="text-lg text-muted-foreground">Hospital No: {patient.hospital_number} {" | Patient No: "} {patient.patient_number || "N/A"}</p>
           </div>
           <div className="text-right">
             <Badge variant="secondary" className="text-base">{patient.age} y/o {patient.sex}</Badge>

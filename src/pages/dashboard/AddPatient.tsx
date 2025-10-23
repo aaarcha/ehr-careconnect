@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
@@ -44,6 +44,15 @@ const AddPatient = () => {
   const [admitToLocation, setAdmitToLocation] = useState("");
   const [referredBy, setReferredBy] = useState("");
   const [attendingPhysicianId, setAttendingPhysicianId] = useState("");
+  const [doctors, setDoctors] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchDoctors = async () => {
+      const { data, error } = await supabase.from("doctors").select("id, name");
+      if (!error && data) setDoctors(data);
+    };
+    fetchDoctors();
+  }, []);
   const [philhealth, setPhilhealth] = useState(false);
   
   // Medical History
@@ -473,6 +482,20 @@ const AddPatient = () => {
                     onChange={(e) => setAdmitToLocation(e.target.value)}
                     placeholder="e.g., Room 101, Bed 1"
                   />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="attendingPhysicianId">Attending Doctor</Label>
+                  <Select value={attendingPhysicianId} onValueChange={setAttendingPhysicianId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select doctor" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {doctors.map((doc) => (
+                        <SelectItem key={doc.id} value={doc.id}>{doc.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div className="space-y-2">
