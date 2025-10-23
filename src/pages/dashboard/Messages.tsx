@@ -197,19 +197,50 @@ export default function Messages(): JSX.Element {
     return `${user.display} (${roleLabel})`;
   };
 
-  const filteredMessages = useMemo(() => {
-    return messages.filter((m) => {
-      const term = searchTerm.toLowerCase();
-      const otherUserId = m.sender_id === currentUserId ? m.recipient_id : m.sender_id;
-      const otherUserLabel = getUserLabel(otherUserId).toLowerCase();
-      
-      return (
-        otherUserLabel.includes(term) ||
-        m.content.toLowerCase().includes(term) || 
-        (m.subject && m.subject.toLowerCase().includes(term))
-      );
-    });
-  }, [messages, searchTerm, currentUserId]);
+  const conversations = useMemo(() => {
+    const threads = new Map<string, Message>();
+
+    for (const message of messages) {
+      const partnerId = message.sender_id === currentUserId 
+        ? message.recipient_id 
+        : message.sender_id;
+
+      if (!threads.has(partnerId) || new Date(message.created_at) > new Date(threads.get(partnerId)!.created_at)) {
+        threads.set(partnerId, message);
+      }
+    }
+
+    return Array.from(threads.values())
+      .filter((m) => {
+        const term = searchTerm.toLowerCase();
+        const partnerId = m.sender_id === currentUserId ? m.recipient_id : m.sender_id;
+        const partnerLabel = getUserLabel(partnerId).toLowerCase();
+        
+        return (
+          partnerLabel.includes(term) ||
+          m.content.toLowerCase().includes(term) || 
+          (m.subject && m.subject.toLowerCase().includes(term))
+        );
+      })
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+  }, [messages, searchTerm, currentUserId, getUserLabel]);
+
+  const currentThread = useMemo(() => {
+    if (!selectedMessage || !currentUserId) return [];
+
+    const partnerId = selectedMessage.sender_id === currentUserId
+      ? selectedMessage.recipient_id
+      : selectedMessage.sender_id;
+
+    return messages
+      .filter(m => 
+        (m.sender_id === currentUserId && m.recipient_id === partnerId) || 
+        (m.sender_id === partnerId && m.recipient_id === currentUserId)
+      )
+      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+  }, [selectedMessage, messages, currentUserId]);
+
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -232,7 +263,7 @@ export default function Messages(): JSX.Element {
           </CardHeader>
           <CardContent className="p-0">
             <ScrollArea className="h-[500px]">
-              {filteredMessages.map((message) => {
+              {conversations.map((message) => {
                 const isSent = message.sender_id === currentUserId;
                 const otherUserId = isSent ? message.recipient_id : message.sender_id;
                 const otherUserLabel = getUserLabel(otherUserId);
@@ -268,13 +299,30 @@ export default function Messages(): JSX.Element {
           </CardContent>
         </Card>
 
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle>{selectedMessage ? `Conversation with ${getUserLabel(selectedMessage.sender_id === currentUserId ? selectedMessage.recipient_id : selectedMessage.sender_id)}` : "New Message"}</CardTitle>
+        <Card className="lg:col-span-2 flex flex-col">
+          <CardHeader className="flex-shrink-0">
+            <CardTitle className="flex items-center gap-2">
+              {selectedMessage && (
+                <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    onClick={() => setSelectedMessage(null)}
+                    aria-label="New Message"
+                >
+                    &larr;
+                </Button>
+              )}
+              {selectedMessage 
+                ? `Conversation with ${getUserLabel(selectedMessage.sender_id === currentUserId ? selectedMessage.recipient_id : selectedMessage.sender_id)}` 
+                : "New Message"
+              }
+            </CardTitle>
           </CardHeader>
-          <CardContent>
+          
+          <CardContent className="flex flex-col h-[500px] p-0">
             {!selectedMessage ? (
-              <div className="space-y-4">
+              // New Message Composition View
+              <div className="p-6 space-y-4 flex-grow flex flex-col">
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Recipient</label>
                   <div className="grid grid-cols-2 gap-2">
@@ -316,38 +364,71 @@ export default function Messages(): JSX.Element {
                   <Input placeholder="Subject (optional)" value={messageSubject} onChange={(e) => setMessageSubject(e.target.value)} />
                 </div>
 
-                <div className="flex gap-2">
+                <div className="flex gap-2 mt-auto">
                   <Textarea placeholder="Type your message..." value={messageText} onChange={(e) => setMessageText(e.target.value)} className="min-h-[200px]" />
-                  <Button className="self-end" onClick={sendMessage} disabled={!selectedRecipient || !messageText.trim()}><Send className="h-4 w-4" /></Button>
+                  <Button className="self-end shrink-0" onClick={sendMessage} disabled={!selectedRecipient || !messageText.trim()}><Send className="h-4 w-4" /></Button>
                 </div>
               </div>
-            ) : (
-              <div className="space-y-4">
-                <div className="bg-muted p-4 rounded-lg">
-                  {selectedMessage.subject && <p className="font-semibold text-sm mb-2">Subject: {selectedMessage.subject}</p>}
-                  <p className="text-sm whitespace-pre-wrap">{selectedMessage.content}</p>
-                  <p className="text-xs text-muted-foreground mt-2">
-                    {selectedMessage.sender_id === currentUserId ? "Sent" : "Received"} on {new Date(selectedMessage.created_at).toLocaleString()}
-                  </p>
-                </div>
 
-                <div className="space-y-2">
-                  <Input placeholder="Subject (optional)" value={messageSubject} onChange={(e) => setMessageSubject(e.target.value)} />
-                  <div className="flex gap-2">
-                    <Textarea placeholder={`Type your reply to ${getUserLabel(selectedMessage.sender_id === currentUserId ? selectedMessage.recipient_id : selectedMessage.sender_id)}...`} value={messageText} onChange={(e) => setMessageText(e.target.value)} className="min-h-[80px]" />
-                    <Button 
-                      className="self-end" 
-                      onClick={() => { 
-                        setSelectedRecipient(selectedMessage.sender_id === currentUserId ? selectedMessage.recipient_id : selectedMessage.sender_id); 
-                        void sendMessage(); 
-                      }}
-                      disabled={!messageText.trim()}
-                    >
-                      <Send className="h-4 w-4" />
-                    </Button>
+            ) : (
+              // Conversation Thread View (Chat)
+              <>
+                <ScrollArea className="flex-grow p-4">
+                  <div className="space-y-4">
+                    {currentThread.map((message) => {
+                      const isCurrentUser = message.sender_id === currentUserId;
+                      return (
+                        <div 
+                          key={message.id} 
+                          className={`flex ${isCurrentUser ? 'justify-end' : 'justify-start'}`}
+                        >
+                          <div className={`max-w-xs md:max-w-md p-3 rounded-xl text-sm ${
+                            isCurrentUser
+                              ? 'bg-primary text-primary-foreground rounded-br-none'
+                              : 'bg-muted rounded-tl-none'
+                          }`}>
+                            {message.subject && (
+                              <p className={`font-semibold mb-1 ${isCurrentUser ? 'text-white/80' : 'text-foreground/80'}`}>
+                                Re: {message.subject}
+                              </p>
+                            )}
+                            <p className="whitespace-pre-wrap">{message.content}</p>
+                            <p className={`mt-1 text-xs text-right ${isCurrentUser ? 'text-white/60' : 'text-muted-foreground'}`}>
+                              {new Date(message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </ScrollArea>
+                
+                {/* Reply Input Area */}
+                <div className="p-4 border-t flex-shrink-0">
+                  <div className="space-y-2">
+                    <Input placeholder="Subject (optional)" value={messageSubject} onChange={(e) => setMessageSubject(e.target.value)} />
+                    <div className="flex gap-2">
+                      <Textarea 
+                        placeholder={`Type your reply to ${getUserLabel(selectedMessage.sender_id === currentUserId ? selectedMessage.recipient_id : selectedMessage.sender_id)}...`} 
+                        value={messageText} 
+                        onChange={(e) => setMessageText(e.target.value)} 
+                        className="min-h-[60px]" 
+                      />
+                      <Button 
+                        className="self-end shrink-0" 
+                        onClick={() => { 
+                          const partnerId = selectedMessage.sender_id === currentUserId ? selectedMessage.recipient_id : selectedMessage.sender_id;
+                          setSelectedRecipient(partnerId); 
+                          void sendMessage(); 
+                        }}
+                        disabled={!messageText.trim()}
+                      >
+                        <Send className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                 </div>
-              </div>
+              </>
             )}
           </CardContent>
         </Card>
