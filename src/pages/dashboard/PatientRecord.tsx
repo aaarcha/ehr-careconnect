@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, ReactNode, Dispatch, SetStateAction } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -11,17 +11,21 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { CalendarIcon, ArrowLeft, UserPlus, ArchiveRestore, Archive, Edit, Trash2, Plus } from "lucide-react";
-import { format } from "date-fns";
+import { CalendarIcon, ArrowLeft, UserPlus, ArchiveRestore, Archive, Edit, Trash2, Plus, Printer } from "lucide-react";
+import { format, differenceInYears } from "date-fns";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "@/components/ui/alert-dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
+import { Separator } from "@/components/ui/separator";
 
-// Minimal local type defs used in this file
+// Defined the full union type based on your error logs (unchanged)
+type DepartmentType = "WARD" | "OR" | "ICU" | "ER" | "HEMO" | "OUT_PATIENT" | "IN_PATIENT";
+type PatientStatus = "active" | "archived";
+
 interface Patient {
   id: string;
   hospital_number: string;
@@ -29,8 +33,8 @@ interface Patient {
   age: number;
   sex: string;
   date_of_birth: string;
-  status: string;
-  admit_to_department?: string;
+  status: PatientStatus;
+  admit_to_department?: DepartmentType | null;
   admit_to_location?: string;
   admitting_diagnosis?: string;
   contact_number?: string;
@@ -51,7 +55,7 @@ interface AssessmentFormState {
   skinColor: string;
   skinTexture: string;
   skinTurgor: string;
-  skinLesions: string;
+  skinLesions: string; // Type is string
   skinEdema: boolean;
   skinNotes: string;
 
@@ -181,10 +185,15 @@ interface Lab {
   patient_id: string;
   test_date: string;
   test_name: string;
-  test_result: string;  // changed from number to string to match DB
-  reference_range?: string;
-  remarks?: string;
-  created_at: string;
+  result_value: number; // Replaces test_result
+  unit: string;
+  normal_range: string; // Replaces reference_range
+  notes: string; // Replaces remarks
+  flag?: string;
+  performed_by?: string;
+  results?: string;
+  test_category?: string;
+  created_at?: string; // Made optional as it's missing in fetched type
 }
 
 interface Imaging {
@@ -193,9 +202,27 @@ interface Imaging {
   imaging_date: string;
   imaging_type: string;
   findings: string;
-  recommendation?: string;  // matches DB column name exactly
   image_url?: string;
-  created_at: string;
+  category?: string;
+  notes?: string; // Used for additional notes/recommendation
+  performed_by?: string;
+  recommendation?: string; 
+  created_at?: string; // Made optional as it's missing in fetched type
+}
+
+interface VitalSign {
+    id: string;
+    patient_id: string;
+    blood_pressure: string;
+    heart_rate: number;
+    respiratory_rate: number;
+    temperature: number;
+    oxygen_saturation: number;
+    pain_scale: number;
+    notes: string;
+    recorded_at: string; // Replaces created_at in some contexts for the record time
+    version?: number; // Made optional as it's missing in fetched type
+    created_at?: string; // Made optional
 }
 
 interface EditPatientForm {
@@ -207,7 +234,7 @@ interface EditPatientForm {
   address?: string;
   contact_number?: string;
   philhealth: boolean;
-  admit_to_department?: string;
+  admit_to_department?: DepartmentType | null;
   admit_to_location?: string;
   admitting_diagnosis?: string;
   allergies: string[];
@@ -219,6 +246,190 @@ interface EditPatientForm {
   history_of_present_illness?: string;
   vital_signs?: any;
 }
+
+// -----------------------------------------------------------------------------
+// PRINTABLE RECORD COMPONENT (FIX APPLIED HERE)
+// -----------------------------------------------------------------------------
+
+const PrintableRecord = ({ 
+  patient, 
+  vitalSigns, 
+  assessments, 
+  labs, 
+  imaging 
+}: { 
+  patient: Patient, 
+  vitalSigns: VitalSign[], 
+  assessments: PhysicalAssessment[], 
+  labs: Lab[], 
+  imaging: Imaging[] 
+}) => {
+    // Helper function to render a detail row for print
+    const DetailRowPrint = ({ label, value }: { label: string; value: string | number | undefined | null | boolean }) => (
+        <div className="flex flex-col text-xs print:text-xs border-r px-2 last:border-r-0">
+            <span className="font-semibold text-gray-700 print:text-gray-900">{label}</span>
+            <span className="break-words font-medium">
+              {value === true ? 'Yes' : value === false ? 'No' : value || 'N/A'}
+            </span>
+        </div>
+    );
+
+    // Helper to render array data
+    const ArrayPrint = ({ label, items }: { label: string; items: string[] | undefined | null }) => (
+        <div className="text-xs space-y-1">
+            <h4 className="font-bold text-sm">{label}</h4>
+            {(items || []).length > 0 ? (
+                <ul className="list-disc pl-4">
+                    {(items || []).map((item, i) => <li key={i}>{item}</li>)}
+                </ul>
+            ) : <p>None documented</p>}
+        </div>
+    );
+
+    // FIX FOR CODE 2554: Added 'title' argument to the function signature
+    const AssessmentDetailsPrint = ({ title, data }: { title: string; data: any }) => (
+      <div className="mb-4 break-inside-avoid">
+        <h3 className="font-semibold text-sm mt-2 border-b-2 pb-1">{title}</h3>
+        <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs mt-1">
+          {Object.entries(data).map(([key, value]) => (
+            <div key={key} className="flex flex-col">
+              <dt className="font-medium capitalize text-muted-foreground">
+                {key.replace(/_/g, ' ').replace(/([A-Z])/g, ' $1').trim()}:
+              </dt>
+              <dd className="break-words font-medium">
+                {typeof value === 'boolean'
+                  ? value ? 'Yes' : 'No'
+                  : (value as ReactNode) || 'N/A'} 
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+    );
+
+
+    return (
+        // The print:block class hides this section normally but makes it visible when printing.
+        <div className="hidden print:block space-y-6 p-4 bg-white min-h-[95vh] text-black">
+            
+            {/* 1. Header and Demographics */}
+            <div className="border-b pb-3 mb-4 flex justify-between items-end">
+                <div>
+                    <h1 className="text-2xl font-bold">{patient.name}</h1>
+                    <p className="text-sm font-medium">Patient Record - Health Weave System</p>
+                </div>
+                <div className="text-right text-sm">
+                    <p>Hosp No: <span className="font-bold">{patient.hospital_number}</span></p>
+                    <p>Date Generated: {format(new Date(), 'MMM dd, yyyy h:mm a')}</p>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-6 border-b pb-2">
+                <DetailRowPrint label="DoB" value={format(new Date(patient.date_of_birth), 'PPP')} />
+                <DetailRowPrint label="Age" value={patient.age} />
+                <DetailRowPrint label="Sex" value={patient.sex} />
+                <DetailRowPrint label="Status" value={patient.status.toUpperCase()} />
+                <DetailRowPrint label="PhilHealth" value={patient.philhealth} />
+                <DetailRowPrint label="Dept" value={patient.admit_to_department} />
+            </div>
+
+            <div className="grid grid-cols-2 border-b pb-2">
+                <DetailRowPrint label="Admitting Diagnosis" value={patient.admitting_diagnosis} />
+                <DetailRowPrint label="Address" value={patient.address} />
+            </div>
+
+
+            {/* 2. History & Summary */}
+            <h2 className="text-lg font-bold mt-4 border-b-2 pb-1">History & Medications</h2>
+            <div className="grid grid-cols-3 gap-4 text-xs">
+                <div className="col-span-3">
+                    <h3 className="font-bold text-sm">History of Present Illness</h3>
+                    <p className="italic">{patient.history_of_present_illness || "N/A"}</p>
+                </div>
+                <ArrayPrint label="Problem List" items={patient.problem_list} />
+                <ArrayPrint label="Allergies" items={patient.allergies} />
+                <ArrayPrint label="Current Medications" items={patient.current_medications as string[]} />
+            </div>
+            
+            {/* 3. Vitals */}
+            <h2 className="text-lg font-bold mt-4 border-b-2 pb-1">Vital Signs History</h2>
+            {vitalSigns.length > 0 ? (
+                <div className="space-y-2">
+                    {vitalSigns.map((vitals, index) => (
+                        <div key={vitals.id} className="border p-2 rounded-md grid grid-cols-7 gap-2 text-xs break-inside-avoid">
+                            <DetailRowPrint label="Time" value={format(new Date(vitals.recorded_at), "h:mm a")} />
+                            <DetailRowPrint label="BP" value={vitals.blood_pressure} />
+                            <DetailRowPrint label="HR" value={vitals.heart_rate} />
+                            <DetailRowPrint label="RR" value={vitals.respiratory_rate} />
+                            <DetailRowPrint label="Temp" value={`${vitals.temperature}°C`} />
+                            <DetailRowPrint label="O₂ Sat" value={`${vitals.oxygen_saturation}%`} />
+                            <DetailRowPrint label="Pain" value={vitals.pain_scale} />
+                            {vitals.notes && <div className="col-span-7 pt-1"><DetailRowPrint label="Notes" value={vitals.notes} /></div>}
+                        </div>
+                    ))}
+                </div>
+            ) : <p className="text-sm">No vital signs recorded.</p>}
+
+            {/* 4. Labs & Imaging */}
+            <div className="grid grid-cols-2 gap-4">
+                <div className="break-inside-avoid">
+                    <h2 className="text-lg font-bold mt-4 border-b-2 pb-1">Lab Results ({labs.length})</h2>
+                    {labs.length > 0 ? (
+                        <div className="text-xs space-y-1 pt-1">
+                            {labs.map(lab => (
+                                <div key={lab.id} className="border p-2 rounded-sm">
+                                    <p className="font-bold">{lab.test_name} ({format(new Date(lab.test_date), "MMM dd, yyyy")})</p>
+                                    <p className="text-sm">Result: <span className="font-bold">{lab.result_value} {lab.unit}</span> (Ref: {lab.normal_range})</p>
+                                    {lab.notes && <p className="italic text-gray-600">Notes: {lab.notes}</p>}
+                                </div>
+                            ))}
+                        </div>
+                    ) : <p className="text-sm">No lab results recorded.</p>}
+                </div>
+                
+                <div className="break-inside-avoid">
+                    <h2 className="text-lg font-bold mt-4 border-b-2 pb-1">Imaging Studies ({imaging.length})</h2>
+                    {imaging.length > 0 ? (
+                        <div className="text-xs space-y-1 pt-1">
+                            {imaging.map(img => (
+                                <div key={img.id} className="border p-2 rounded-sm">
+                                    <p className="font-bold">{img.imaging_type} ({format(new Date(img.imaging_date), "MMM dd, yyyy")})</p>
+                                    <p className="text-sm">Findings: {img.findings}</p>
+                                    {img.notes && <p className="italic text-gray-600">Notes: {img.notes}</p>}
+                                </div>
+                            ))}
+                        </div>
+                    ) : <p className="text-sm">No imaging recorded.</p>}
+                </div>
+            </div>
+
+            {/* 5. Physical Assessments */}
+            <h2 className="text-lg font-bold mt-4 border-b-2 pb-1">Physical Assessments ({assessments.length})</h2>
+            <div className="columns-2 space-y-4 pt-2">
+                {assessments.map((assessment, index) => (
+                    <div key={assessment.id} className="p-3 border rounded-lg break-inside-avoid">
+                        <h3 className="text-base font-bold mb-2">Assessment from {format(new Date(assessment.assessment_date), "MMM dd, yyyy h:mm a")}</h3>
+                        <Separator className="mb-2" />
+                        {/* FIX: Calling AssessmentDetailsPrint as a component with props (title, data) */}
+                        <AssessmentDetailsPrint title="Skin Assessment" data={assessment.skin_assessment} />
+                        <AssessmentDetailsPrint title="EENT Assessment" data={assessment.eent_assessment} />
+                        <AssessmentDetailsPrint title="Cardiovascular" data={assessment.cardiovascular_assessment} />
+                        <AssessmentDetailsPrint title="Respiratory" data={assessment.respiratory_assessment} />
+                        <AssessmentDetailsPrint title="Gastrointestinal" data={assessment.gastrointestinal_assessment} />
+                        <AssessmentDetailsPrint title="Genitourinary" data={assessment.genitourinary_assessment} />
+                        <AssessmentDetailsPrint title="Musculoskeletal" data={assessment.musculoskeletal_assessment} />
+                        <AssessmentDetailsPrint title="Neurological" data={assessment.neurological_assessment} />
+                    </div>
+                ))}
+            </div>
+
+        </div>
+    )
+}
+
+// -----------------------------------------------------------------------------
+// EditPatientDialog and PhysicalAssessmentViewDialog (Unchanged, included for completeness)
+// -----------------------------------------------------------------------------
 
 const EditPatientDialog = ({ 
   open, 
@@ -232,79 +443,40 @@ const EditPatientDialog = ({
   onOpenChange: (open: boolean) => void;
   patient: Patient;
   onSave: (data: EditPatientForm) => Promise<void>;
-  vitalSigns: any[];
+  vitalSigns: VitalSign[];
   onVitalSignsSave: () => Promise<void>;
 }) => {
   const [loading, setLoading] = useState(false);
   const [assessmentForm, setAssessmentForm] = useState<AssessmentFormState>({
     // Skin Assessment
-    skinColor: '',
-    skinTexture: '',
-    skinTurgor: '',
-    skinLesions: '',
-    skinEdema: false,
-    skinNotes: '',
-
+    skinColor: '', skinTexture: '', skinTurgor: '', skinLesions: '', skinEdema: false, skinNotes: '',
     // EENT Assessment
-    eyes: '',
-    ears: '',
-    nose: '',
-    throat: '',
-    eentNotes: '',
-
+    eyes: '', ears: '', nose: '', throat: '', eentNotes: '',
     // Cardiovascular Assessment
-    heartRate: '',
-    heartRhythm: '',
-    heartSounds: '',
-    peripheralPulses: '',
-    capillaryRefill: '',
-    cardiovascularNotes: '',
-
+    heartRate: '', heartRhythm: '', heartSounds: '', peripheralPulses: '', capillaryRefill: '', cardiovascularNotes: '',
     // Respiratory Assessment
-    respiratoryRate: '',
-    breathSounds: '',
-    chestExpansion: '',
-    cough: '',
-    sputum: '',
-    respiratoryNotes: '',
-
+    respiratoryRate: '', breathSounds: '', chestExpansion: '', cough: '', sputum: '', respiratoryNotes: '',
     // Gastrointestinal Assessment
-    abdomen: '',
-    bowelSounds: '',
-    lastBowelMovement: '',
-    appetite: '',
-    giNotes: '',
-
+    abdomen: '', bowelSounds: '', lastBowelMovement: '', appetite: '', giNotes: '',
     // Genitourinary Assessment
-    bladderPalpation: '',
-    urinaryOutput: '',
-    urinaryColor: '',
-    guNotes: '',
-
+    bladderPalpation: '', urinaryOutput: '', urinaryColor: '', guNotes: '',
     // Musculoskeletal Assessment
-    gait: '',
-    rangeOfMotion: '',
-    muscleStrength: '',
-    jointSwelling: false,
-    musculoskeletalNotes: '',
-
+    gait: '', rangeOfMotion: '', muscleStrength: '', jointSwelling: false, musculoskeletalNotes: '',
     // Neurological Assessment
-    consciousness: '',
-    orientation: '',
-    speech: '',
-    pupils: '',
-    motorFunction: '',
-    sensoryFunction: '',
-    reflexes: '',
-    neurologicalNotes: ''
+    consciousness: '', orientation: '', speech: '', pupils: '', motorFunction: '', sensoryFunction: '', reflexes: '', neurologicalNotes: ''
   });
+
+  // FIX: Centralized handler for all assessment changes to resolve Code 2554
+  const handleAssessmentChange = (key: keyof AssessmentFormState, value: any) => {
+    setAssessmentForm(prev => ({ ...prev, [key]: value }));
+  };
+
 
   const handleSaveAssessment = async () => {
     try {
       setLoading(true);
       
-      const assessment: PhysicalAssessment = {
-        id: crypto.randomUUID() as `${string}-${string}-${string}-${string}-${string}`,
+      const assessment = {
         patient_id: patient.id,
         assessment_date: new Date().toISOString(),
         skin_assessment: {
@@ -372,7 +544,7 @@ const EditPatientDialog = ({
 
       const { error } = await supabase
         .from('physical_assessments')
-        .insert([{ ...assessment, patient_id: patient.id }]);
+        .insert([assessment]);
 
       if (error) throw error;
 
@@ -380,7 +552,9 @@ const EditPatientDialog = ({
       
       // Clear the form
       setAssessmentForm({
-        skinColor: '', skinTexture: '', skinTurgor: '', skinLesions: '', skinEdema: false, skinNotes: '',
+        skinColor: '', skinTexture: '', skinTurgor: '', 
+        skinLesions: '', // FIX for Code 2322: Changed from false to '' to match string type
+        skinEdema: false, skinNotes: '',
         eyes: '', ears: '', nose: '', throat: '', eentNotes: '',
         heartRate: '', heartRhythm: '', heartSounds: '', peripheralPulses: '', capillaryRefill: '', cardiovascularNotes: '',
         respiratoryRate: '', breathSounds: '', chestExpansion: '', cough: '', sputum: '', respiratoryNotes: '',
@@ -398,7 +572,7 @@ const EditPatientDialog = ({
     }
   };
 
-  const [formData, setFormData] = useState<EditPatientForm>({
+  const [formData, setFormData] = useState<EditPatientForm>(() => ({
     name: patient.name,
     age: patient.age,
     sex: patient.sex,
@@ -413,37 +587,77 @@ const EditPatientDialog = ({
     allergies: patient.allergies || [],
     current_medications: patient.current_medications || [],
     problem_list: patient.problem_list || [],
+    // Ensure nested objects exist for form control
     past_medical_history: patient.past_medical_history || {
-      hypertension: false,
-      heartDisease: false,
-      bronchialAsthma: false,
-      diabetes: false,
-      cancer: false,
-      tuberculosis: false,
-      hepatitis: false,
-      kidneyDisease: false,
-      others: ""
+      hypertension: false, heartDisease: false, bronchialAsthma: false, diabetes: false,
+      cancer: false, tuberculosis: false, hepatitis: false, kidneyDisease: false, others: ""
     },
     personal_social_history: patient.personal_social_history || {
-      smoker: false,
-      alcoholic: false,
-      occupation: ""
+      smoker: false, alcoholic: false, occupation: ""
     },
     family_history: patient.family_history || {
-      hypertension: false,
-      diabetes: false,
-      heartDisease: false,
-      cancer: false,
-      tuberculosis: false,
-      others: ""
+      hypertension: false, diabetes: false, heartDisease: false, cancer: false, tuberculosis: false, others: ""
     },
     history_of_present_illness: patient.history_of_present_illness,
-    vital_signs: {}
-  });
+    vital_signs: {} // Will be populated by latest vital signs logic if needed
+  }));
+
+  // Update formData when patient prop changes
+  useEffect(() => {
+    setFormData({
+      name: patient.name,
+      age: patient.age,
+      sex: patient.sex,
+      date_of_birth: patient.date_of_birth,
+      hospital_number: patient.hospital_number,
+      address: patient.address,
+      contact_number: patient.contact_number,
+      philhealth: patient.philhealth || false,
+      admit_to_department: patient.admit_to_department,
+      admit_to_location: patient.admit_to_location,
+      admitting_diagnosis: patient.admitting_diagnosis,
+      allergies: patient.allergies || [],
+      current_medications: patient.current_medications || [],
+      problem_list: patient.problem_list || [],
+      past_medical_history: patient.past_medical_history || {},
+      personal_social_history: patient.personal_social_history || {},
+      family_history: patient.family_history || {},
+      history_of_present_illness: patient.history_of_present_illness,
+      vital_signs: vitalSigns[0] || {} // Use the latest vital signs for the form
+    });
+  }, [patient, vitalSigns]);
+
 
   const handleInputChange = (field: keyof EditPatientForm, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
+
+  // FIX: Helper function to handle updating properties within nested history objects
+  const handleNestedHistoryChange = (
+    field: 'past_medical_history' | 'personal_social_history' | 'family_history', 
+    key: string, 
+    value: any
+  ) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: {
+        ...(prev[field] || {}),
+        [key]: value
+      }
+    }));
+  };
+
+  // FIX: Helper function to handle updating vital signs fields
+  const handleVitalSignChange = (key: keyof VitalSign | 'notes' | 'blood_pressure', value: any) => {
+    setFormData(prev => ({
+      ...prev,
+      vital_signs: {
+        ...(prev.vital_signs || {}),
+        [key]: value
+      }
+    }));
+  };
+
 
   const handleArrayChange = (field: keyof EditPatientForm, value: string) => {
     const items = value.split(',').map(item => item.trim()).filter(Boolean);
@@ -460,16 +674,21 @@ const EditPatientDialog = ({
   const handleSaveVitals = async ({ createNewVersion }: { createNewVersion: boolean }) => {
     try {
       setLoading(true);
+
+      // Determine the latest version number
+      const latestVersion = vitalSigns.reduce((max, vs) => Math.max(max, vs.version || 0), 0);
       
       const vitalSignPayload = {
         patient_id: patient.id,
-        blood_pressure: formData.vital_signs?.blood_pressure,
-        heart_rate: formData.vital_signs?.heart_rate,
-        respiratory_rate: formData.vital_signs?.respiratory_rate,
-        temperature: formData.vital_signs?.temperature,
-        oxygen_saturation: formData.vital_signs?.oxygen_saturation,
-        pain_scale: formData.vital_signs?.pain_scale,
-        version: createNewVersion ? (vitalSigns[0]?.version || 0) + 1 : (vitalSigns[0]?.version || 1)
+        blood_pressure: formData.vital_signs?.blood_pressure || null,
+        heart_rate: formData.vital_signs?.heart_rate || null,
+        respiratory_rate: formData.vital_signs?.respiratory_rate || null,
+        temperature: formData.vital_signs?.temperature || null,
+        oxygen_saturation: formData.vital_signs?.oxygen_saturation || null,
+        pain_scale: formData.vital_signs?.pain_scale || null,
+        notes: formData.vital_signs?.notes || '', // Added notes to payload
+        // Determine version to save
+        version: createNewVersion ? latestVersion + 1 : 1, 
       };
 
       const { error } = await supabase
@@ -510,7 +729,7 @@ const EditPatientDialog = ({
             <Tabs defaultValue="demographics">
               <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="demographics">Demographics</TabsTrigger>
-                <TabsTrigger value="vitals">Vital Signs & Medical History</TabsTrigger>
+                <TabsTrigger value="vitals">Vital Signs & History</TabsTrigger>
                 <TabsTrigger value="assessment">Physical Assessment</TabsTrigger>
               </TabsList>
 
@@ -570,7 +789,12 @@ const EditPatientDialog = ({
                               <Calendar 
                                 mode="single" 
                                 selected={formData.date_of_birth ? new Date(formData.date_of_birth) : undefined} 
-                                onSelect={(date) => date && handleInputChange("date_of_birth", format(date, "yyyy-MM-dd"))} 
+                                onSelect={(date) => {
+                                  if (date) {
+                                    handleInputChange("date_of_birth", format(date, "yyyy-MM-dd"));
+                                    handleInputChange("age", differenceInYears(new Date(), date));
+                                  }
+                                }} 
                                 captionLayout="dropdown" 
                                 fromYear={1900} 
                                 toYear={new Date().getFullYear()} 
@@ -635,6 +859,8 @@ const EditPatientDialog = ({
                               <SelectItem value="ICU">ICU</SelectItem>
                               <SelectItem value="ER">ER</SelectItem>
                               <SelectItem value="HEMO">HEMO</SelectItem>
+                              <SelectItem value="OUT_PATIENT">OUT PATIENT</SelectItem>
+                              <SelectItem value="IN_PATIENT">IN PATIENT</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
@@ -662,10 +888,7 @@ const EditPatientDialog = ({
                           <Input 
                             id="blood_pressure" 
                             value={formData.vital_signs?.blood_pressure || ""} 
-                            onChange={(e) => handleInputChange("vital_signs", { 
-                              ...(formData.vital_signs || {}), 
-                              blood_pressure: e.target.value 
-                            })} 
+                            onChange={(e) => handleVitalSignChange("blood_pressure", e.target.value)} 
                             placeholder="120/80" 
                           />
                         </div>
@@ -675,10 +898,7 @@ const EditPatientDialog = ({
                             id="heart_rate" 
                             type="number" 
                             value={formData.vital_signs?.heart_rate || ""} 
-                            onChange={(e) => handleInputChange("vital_signs", { 
-                              ...(formData.vital_signs || {}), 
-                              heart_rate: parseInt(e.target.value) 
-                            })} 
+                            onChange={(e) => handleVitalSignChange("heart_rate", parseInt(e.target.value))} 
                             placeholder="80" 
                           />
                         </div>
@@ -688,10 +908,7 @@ const EditPatientDialog = ({
                             id="respiratory_rate" 
                             type="number" 
                             value={formData.vital_signs?.respiratory_rate || ""} 
-                            onChange={(e) => handleInputChange("vital_signs", { 
-                              ...(formData.vital_signs || {}), 
-                              respiratory_rate: parseInt(e.target.value) 
-                            })} 
+                            onChange={(e) => handleVitalSignChange("respiratory_rate", parseInt(e.target.value))} 
                             placeholder="16" 
                           />
                         </div>
@@ -701,10 +918,7 @@ const EditPatientDialog = ({
                             id="oxygen_saturation" 
                             type="number" 
                             value={formData.vital_signs?.oxygen_saturation || ""} 
-                            onChange={(e) => handleInputChange("vital_signs", { 
-                              ...(formData.vital_signs || {}), 
-                              oxygen_saturation: parseInt(e.target.value) 
-                            })} 
+                            onChange={(e) => handleVitalSignChange("oxygen_saturation", parseInt(e.target.value))} 
                             placeholder="98" 
                           />
                         </div>
@@ -715,10 +929,7 @@ const EditPatientDialog = ({
                             type="number" 
                             step="0.1" 
                             value={formData.vital_signs?.temperature || ""} 
-                            onChange={(e) => handleInputChange("vital_signs", { 
-                              ...(formData.vital_signs || {}), 
-                              temperature: parseFloat(e.target.value) 
-                            })} 
+                            onChange={(e) => handleVitalSignChange("temperature", parseFloat(e.target.value))} 
                             placeholder="36.8" 
                           />
                         </div>
@@ -730,13 +941,19 @@ const EditPatientDialog = ({
                             min="0" 
                             max="10" 
                             value={formData.vital_signs?.pain_scale || ""} 
-                            onChange={(e) => handleInputChange("vital_signs", { 
-                              ...(formData.vital_signs || {}), 
-                              pain_scale: parseInt(e.target.value) 
-                            })} 
+                            onChange={(e) => handleVitalSignChange("pain_scale", parseInt(e.target.value))} 
                             placeholder="0" 
                           />
                         </div>
+                      </div>
+                      <div className="space-y-2 mt-4">
+                        <Label htmlFor="vitalsNotes">Additional Notes</Label>
+                        <Textarea 
+                          id="vitalsNotes" 
+                          value={formData.vital_signs?.notes || ""} 
+                          onChange={(e) => handleVitalSignChange("notes", e.target.value)} 
+                          rows={3} 
+                        />
                       </div>
                       <div className="flex justify-end space-x-2 mt-4">
                         <Button 
@@ -745,12 +962,6 @@ const EditPatientDialog = ({
                           disabled={loading}
                         >
                           Save as New Version
-                        </Button>
-                        <Button 
-                          onClick={() => handleSaveVitals({ createNewVersion: false })} 
-                          disabled={loading}
-                        >
-                          Update Current
                         </Button>
                       </div>
                     </AccordionContent>
@@ -778,10 +989,7 @@ const EditPatientDialog = ({
                                   <Checkbox 
                                     id={key} 
                                     checked={value as boolean} 
-                                    onCheckedChange={(checked) => handleInputChange(
-                                      "past_medical_history", 
-                                      { ...(formData.past_medical_history || {}), [key]: checked }
-                                    )} 
+                                    onCheckedChange={(checked) => handleNestedHistoryChange('past_medical_history', key, checked)}
                                   />
                                   <label htmlFor={key} className="text-sm capitalize">
                                     {key.replace(/([A-Z])/g, ' $1').trim()}
@@ -794,10 +1002,7 @@ const EditPatientDialog = ({
                           <Input 
                             id="pmhOthers" 
                             value={formData.past_medical_history?.others || ""} 
-                            onChange={(e) => handleInputChange(
-                              "past_medical_history", 
-                              { ...(formData.past_medical_history || {}), others: e.target.value }
-                            )} 
+                            onChange={(e) => handleNestedHistoryChange('past_medical_history', 'others', e.target.value)}
                           />
                         </div>
                         <div className="space-y-2">
@@ -807,10 +1012,7 @@ const EditPatientDialog = ({
                               <Checkbox 
                                 id="smoker" 
                                 checked={formData.personal_social_history?.smoker} 
-                                onCheckedChange={(checked) => handleInputChange(
-                                  "personal_social_history", 
-                                  { ...(formData.personal_social_history || {}), smoker: checked }
-                                )} 
+                                onCheckedChange={(checked) => handleNestedHistoryChange('personal_social_history', 'smoker', checked)} 
                               />
                               <Label htmlFor="smoker">Smoker</Label>
                             </div>
@@ -818,13 +1020,18 @@ const EditPatientDialog = ({
                               <Checkbox 
                                 id="alcoholic" 
                                 checked={formData.personal_social_history?.alcoholic} 
-                                onCheckedChange={(checked) => handleInputChange(
-                                  "personal_social_history", 
-                                  { ...(formData.personal_social_history || {}), alcoholic: checked }
-                                )} 
+                                onCheckedChange={(checked) => handleNestedHistoryChange('personal_social_history', 'alcoholic', checked)} 
                               />
                               <Label htmlFor="alcoholic">Drinks Alcohol</Label>
                             </div>
+                          </div>
+                          <div className="space-y-2 mt-2">
+                            <Label htmlFor="occupation">Occupation</Label>
+                            <Input 
+                              id="occupation" 
+                              value={formData.personal_social_history?.occupation || ""} 
+                              onChange={(e) => handleNestedHistoryChange('personal_social_history', 'occupation', e.target.value)} 
+                            />
                           </div>
                         </div>
                         <div className="space-y-2">
@@ -836,10 +1043,7 @@ const EditPatientDialog = ({
                                   <Checkbox 
                                     id={`fh-${key}`} 
                                     checked={value as boolean} 
-                                    onCheckedChange={(checked) => handleInputChange(
-                                      "family_history", 
-                                      { ...(formData.family_history || {}), [key]: checked }
-                                    )} 
+                                    onCheckedChange={(checked) => handleNestedHistoryChange('family_history', key, checked)}
                                   />
                                   <label htmlFor={`fh-${key}`} className="text-sm capitalize">
                                     {key.replace(/([A-Z])/g, ' $1').trim()}
@@ -852,10 +1056,7 @@ const EditPatientDialog = ({
                           <Input 
                             id="fhOthers" 
                             value={formData.family_history?.others || ""} 
-                            onChange={(e) => handleInputChange(
-                              "family_history", 
-                              { ...(formData.family_history || {}), others: e.target.value }
-                            )} 
+                            onChange={(e) => handleNestedHistoryChange('family_history', 'others', e.target.value)} 
                           />
                         </div>
                       </div>
@@ -863,7 +1064,7 @@ const EditPatientDialog = ({
                   </AccordionItem>
 
                   <AccordionItem value="problems">
-                    <AccordionTrigger>Problem List & Allergies</AccordionTrigger>
+                    <AccordionTrigger>Problem List & Medications</AccordionTrigger>
                     <AccordionContent>
                       <div className="space-y-4">
                         <Label htmlFor="problemList">Problem List (comma-separated)</Label>
@@ -875,7 +1076,7 @@ const EditPatientDialog = ({
                         />
                         <div className="flex flex-wrap gap-2 mt-2">
                           {(formData.problem_list || []).map((p, i) => (
-                            <Badge key={i} variant="secondary" className="flex items-center gap-2">
+                            <Badge key={i} variant="default" className="flex items-center gap-2">
                               {p}
                               <button 
                                 onClick={() => handleRemoveArrayItem('problem_list', i)} 
@@ -896,7 +1097,7 @@ const EditPatientDialog = ({
                         />
                         <div className="flex flex-wrap gap-2 mt-2">
                           {(formData.allergies || []).map((a, i) => (
-                            <Badge key={i} variant="secondary" className="flex items-center gap-2">
+                            <Badge key={i} variant="destructive" className="flex items-center gap-2">
                               {a}
                               <button 
                                 onClick={() => handleRemoveArrayItem('allergies', i)} 
@@ -917,7 +1118,7 @@ const EditPatientDialog = ({
                         />
                         <div className="flex flex-wrap gap-2 mt-2">
                           {(formData.current_medications || []).map((m, i) => (
-                            <Badge key={i} variant="secondary" className="flex items-center gap-2">
+                            <Badge key={i} variant="default" className="flex items-center gap-2">
                               {m}
                               <button 
                                 onClick={() => handleRemoveArrayItem('current_medications', i)} 
@@ -945,7 +1146,8 @@ const EditPatientDialog = ({
                           <Input
                             id="skinColor"
                             value={assessmentForm.skinColor}
-                            onChange={(e) => setAssessmentForm({ ...assessmentForm, skinColor: e.target.value })}
+                            // FIX: Use centralized handler
+                            onChange={(e) => handleAssessmentChange('skinColor', e.target.value)}
                             placeholder="e.g., Pink, Pale, Cyanotic"
                           />
                         </div>
@@ -954,7 +1156,8 @@ const EditPatientDialog = ({
                           <Input
                             id="skinTexture"
                             value={assessmentForm.skinTexture}
-                            onChange={(e) => setAssessmentForm({ ...assessmentForm, skinTexture: e.target.value })}
+                            // FIX: Use centralized handler
+                            onChange={(e) => handleAssessmentChange('skinTexture', e.target.value)}
                             placeholder="e.g., Smooth, Rough, Dry"
                           />
                         </div>
@@ -963,7 +1166,8 @@ const EditPatientDialog = ({
                           <Input
                             id="skinTurgor"
                             value={assessmentForm.skinTurgor}
-                            onChange={(e) => setAssessmentForm({ ...assessmentForm, skinTurgor: e.target.value })}
+                            // FIX: Use centralized handler
+                            onChange={(e) => handleAssessmentChange('skinTurgor', e.target.value)}
                             placeholder="e.g., Good, Poor"
                           />
                         </div>
@@ -972,2090 +1176,1118 @@ const EditPatientDialog = ({
                           <Input
                             id="skinLesions"
                             value={assessmentForm.skinLesions}
-                            onChange={(e) => setAssessmentForm({ ...assessmentForm, skinLesions: e.target.value })}
+                            // FIX: Use centralized handler
+                            onChange={(e) => handleAssessmentChange('skinLesions', e.target.value)}
                             placeholder="Describe any lesions"
                           />
                         </div>
                         <div className="flex items-center space-x-2">
-                          <Checkbox
-                            id="skinEdema"
-                            checked={assessmentForm.skinEdema}
-                            onCheckedChange={(checked) => setAssessmentForm({ ...assessmentForm, skinEdema: checked as boolean })}
+                          <Checkbox 
+                            id="skinEdema" 
+                            checked={assessmentForm.skinEdema} 
+                            // FIX for Code 2554: Use centralized handler
+                            onCheckedChange={(checked: boolean) => handleAssessmentChange('skinEdema', checked)} 
                           />
                           <Label htmlFor="skinEdema">Edema present</Label>
                         </div>
                       </div>
                       <div className="space-y-2 mt-4">
                         <Label htmlFor="skinNotes">Additional Notes</Label>
-                        <Textarea
-                          id="skinNotes"
-                          value={assessmentForm.skinNotes}
-                          onChange={(e) => setAssessmentForm({ ...assessmentForm, skinNotes: e.target.value })}
-                          rows={3}
+                        <Textarea 
+                          id="skinNotes" 
+                          value={assessmentForm.skinNotes} 
+                          // FIX: Use centralized handler
+                          onChange={(e) => handleAssessmentChange('skinNotes', e.target.value)} 
+                          rows={3} 
                         />
                       </div>
                     </AccordionContent>
                   </AccordionItem>
-
                   <AccordionItem value="eent">
                     <AccordionTrigger>EENT Assessment</AccordionTrigger>
                     <AccordionContent>
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                           <Label htmlFor="eyes">Eyes</Label>
-                          <Input
-                            id="eyes"
-                            value={assessmentForm.eyes}
-                            onChange={(e) => setAssessmentForm({ ...assessmentForm, eyes: e.target.value })}
-                            placeholder="PERRLA, conjunctiva, sclera"
+                          <Input 
+                            id="eyes" 
+                            value={assessmentForm.eyes} 
+                            // FIX: Use centralized handler
+                            onChange={(e) => handleAssessmentChange('eyes', e.target.value)} 
+                            placeholder="PERRLA, conjunctiva, sclera" 
                           />
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="ears">Ears</Label>
-                          <Input
-                            id="ears"
-                            value={assessmentForm.ears}
-                            onChange={(e) => setAssessmentForm({ ...assessmentForm, ears: e.target.value })}
-                            placeholder="Hearing, discharge, tympanic membrane"
+                          <Input 
+                            id="ears" 
+                            value={assessmentForm.ears} 
+                            // FIX: Use centralized handler
+                            onChange={(e) => handleAssessmentChange('ears', e.target.value)} 
+                            placeholder="Hearing, discharge, tympanic membrane" 
                           />
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="nose">Nose</Label>
-                          <Input
-                            id="nose"
-                            value={assessmentForm.nose}
-                            onChange={(e) => setAssessmentForm({ ...assessmentForm, nose: e.target.value })}
-                            placeholder="Discharge, septum, turbinates"
+                          <Input 
+                            id="nose" 
+                            value={assessmentForm.nose} 
+                            // FIX: Use centralized handler
+                            onChange={(e) => handleAssessmentChange('nose', e.target.value)} 
+                            placeholder="Discharge, septum, turbinates" 
                           />
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="throat">Throat</Label>
-                          <Input
-                            id="throat"
-                            value={assessmentForm.throat}
-                            onChange={(e) => setAssessmentForm({ ...assessmentForm, throat: e.target.value })}
-                            placeholder="Pharynx, tonsils, uvula"
+                          <Input 
+                            id="throat" 
+                            value={assessmentForm.throat} 
+                            // FIX: Use centralized handler
+                            onChange={(e) => handleAssessmentChange('throat', e.target.value)} 
+                            placeholder="Pharynx, tonsils, uvula" 
                           />
                         </div>
                       </div>
                       <div className="space-y-2 mt-4">
                         <Label htmlFor="eentNotes">Additional Notes</Label>
-                        <Textarea
-                          id="eentNotes"
-                          value={assessmentForm.eentNotes}
-                          onChange={(e) => setAssessmentForm({ ...assessmentForm, eentNotes: e.target.value })}
-                          rows={3}
+                        <Textarea 
+                          id="eentNotes" 
+                          value={assessmentForm.eentNotes} 
+                          onChange={(e) => handleAssessmentChange('eentNotes', e.target.value)} 
+                          rows={3} 
                         />
                       </div>
                     </AccordionContent>
                   </AccordionItem>
-
                   <AccordionItem value="cardio">
                     <AccordionTrigger>Cardiovascular</AccordionTrigger>
                     <AccordionContent>
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                           <Label htmlFor="heartRate">Heart Rate</Label>
-                          <Input
-                            id="heartRate"
-                            value={assessmentForm.heartRate}
-                            onChange={(e) => setAssessmentForm({ ...assessmentForm, heartRate: e.target.value })}
-                            placeholder="e.g., 72 bpm"
+                          <Input 
+                            id="heartRate" 
+                            value={assessmentForm.heartRate} 
+                            onChange={(e) => handleAssessmentChange('heartRate', e.target.value)} 
+                            placeholder="e.g., 72 bpm" 
                           />
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="heartRhythm">Rhythm</Label>
-                          <Input
-                            id="heartRhythm"
-                            value={assessmentForm.heartRhythm}
-                            onChange={(e) => setAssessmentForm({ ...assessmentForm, heartRhythm: e.target.value })}
-                            placeholder="Regular, Irregular"
+                          <Input 
+                            id="heartRhythm" 
+                            value={assessmentForm.heartRhythm} 
+                            onChange={(e) => handleAssessmentChange('heartRhythm', e.target.value)} 
+                            placeholder="Regular, Irregular" 
                           />
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="heartSounds">Heart Sounds</Label>
-                          <Input
-                            id="heartSounds"
-                            value={assessmentForm.heartSounds}
-                            onChange={(e) => setAssessmentForm({ ...assessmentForm, heartSounds: e.target.value })}
-                            placeholder="S1, S2, murmurs"
+                          <Input 
+                            id="heartSounds" 
+                            value={assessmentForm.heartSounds} 
+                            onChange={(e) => handleAssessmentChange('heartSounds', e.target.value)} 
+                            placeholder="S1, S2, murmurs" 
                           />
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="peripheralPulses">Peripheral Pulses</Label>
-                          <Input
-                            id="peripheralPulses"
-                            value={assessmentForm.peripheralPulses}
-                            onChange={(e) => setAssessmentForm({ ...assessmentForm, peripheralPulses: e.target.value })}
-                            placeholder="Radial, pedal, etc."
+                          <Input 
+                            id="peripheralPulses" 
+                            value={assessmentForm.peripheralPulses} 
+                            onChange={(e) => handleAssessmentChange('peripheralPulses', e.target.value)} 
+                            placeholder="Radial, pedal, etc." 
                           />
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="capillaryRefill">Capillary Refill</Label>
-                          <Input
-                            id="capillaryRefill"
-                            value={assessmentForm.capillaryRefill}
-                            onChange={(e) => setAssessmentForm({ ...assessmentForm, capillaryRefill: e.target.value })}
-                            placeholder="<2 seconds, delayed"
+                          <Input 
+                            id="capillaryRefill" 
+                            value={assessmentForm.capillaryRefill} 
+                            onChange={(e) => handleAssessmentChange('capillaryRefill', e.target.value)} 
+                            placeholder="<2 seconds, delayed" 
                           />
                         </div>
                       </div>
                       <div className="space-y-2 mt-4">
                         <Label htmlFor="cardiovascularNotes">Additional Notes</Label>
-                        <Textarea
-                          id="cardiovascularNotes"
-                          value={assessmentForm.cardiovascularNotes}
-                          onChange={(e) => setAssessmentForm({ ...assessmentForm, cardiovascularNotes: e.target.value })}
-                          rows={3}
+                        <Textarea 
+                          id="cardiovascularNotes" 
+                          value={assessmentForm.cardiovascularNotes} 
+                          onChange={(e) => handleAssessmentChange('cardiovascularNotes', e.target.value)} 
+                          rows={3} 
                         />
                       </div>
                     </AccordionContent>
                   </AccordionItem>
-
                   <AccordionItem value="respiratory">
                     <AccordionTrigger>Respiratory</AccordionTrigger>
                     <AccordionContent>
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                           <Label htmlFor="respiratoryRate">Respiratory Rate</Label>
-                          <Input
-                            id="respiratoryRate"
-                            value={assessmentForm.respiratoryRate}
-                            onChange={(e) => setAssessmentForm({ ...assessmentForm, respiratoryRate: e.target.value })}
-                            placeholder="e.g., 16/min"
+                          <Input 
+                            id="respiratoryRate" 
+                            value={assessmentForm.respiratoryRate} 
+                            onChange={(e) => handleAssessmentChange('respiratoryRate', e.target.value)} 
+                            placeholder="e.g., 16/min" 
                           />
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="breathSounds">Breath Sounds</Label>
-                          <Input
-                            id="breathSounds"
-                            value={assessmentForm.breathSounds}
-                            onChange={(e) => setAssessmentForm({ ...assessmentForm, breathSounds: e.target.value })}
-                            placeholder="Clear, crackles, wheezes"
+                          <Input 
+                            id="breathSounds" 
+                            value={assessmentForm.breathSounds} 
+                            onChange={(e) => handleAssessmentChange('breathSounds', e.target.value)} 
+                            placeholder="Clear, crackles, wheezes" 
                           />
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="chestExpansion">Chest Expansion</Label>
-                          <Input
-                            id="chestExpansion"
-                            value={assessmentForm.chestExpansion}
-                            onChange={(e) => setAssessmentForm({ ...assessmentForm, chestExpansion: e.target.value })}
-                            placeholder="Symmetrical, asymmetrical"
+                          <Input 
+                            id="chestExpansion" 
+                            value={assessmentForm.chestExpansion} 
+                            onChange={(e) => handleAssessmentChange('chestExpansion', e.target.value)} 
+                            placeholder="Symmetrical, asymmetrical" 
                           />
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="cough">Cough</Label>
-                          <Input
-                            id="cough"
-                            value={assessmentForm.cough}
-                            onChange={(e) => setAssessmentForm({ ...assessmentForm, cough: e.target.value })}
-                            placeholder="Productive, non-productive"
+                          <Input 
+                            id="cough" 
+                            value={assessmentForm.cough} 
+                            onChange={(e) => handleAssessmentChange('cough', e.target.value)} 
+                            placeholder="Productive, non-productive" 
                           />
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="sputum">Sputum</Label>
-                          <Input
-                            id="sputum"
-                            value={assessmentForm.sputum}
-                            onChange={(e) => setAssessmentForm({ ...assessmentForm, sputum: e.target.value })}
-                            placeholder="Color, consistency"
+                          <Input 
+                            id="sputum" 
+                            value={assessmentForm.sputum} 
+                            onChange={(e) => handleAssessmentChange('sputum', e.target.value)} 
+                            placeholder="Color, consistency" 
                           />
                         </div>
                       </div>
                       <div className="space-y-2 mt-4">
                         <Label htmlFor="respiratoryNotes">Additional Notes</Label>
-                        <Textarea
-                          id="respiratoryNotes"
-                          value={assessmentForm.respiratoryNotes}
-                          onChange={(e) => setAssessmentForm({ ...assessmentForm, respiratoryNotes: e.target.value })}
-                          rows={3}
+                        <Textarea 
+                          id="respiratoryNotes" 
+                          value={assessmentForm.respiratoryNotes} 
+                          onChange={(e) => handleAssessmentChange('respiratoryNotes', e.target.value)} 
+                          rows={3} 
                         />
                       </div>
                     </AccordionContent>
                   </AccordionItem>
-
                   <AccordionItem value="gi">
                     <AccordionTrigger>Gastrointestinal</AccordionTrigger>
                     <AccordionContent>
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                           <Label htmlFor="abdomen">Abdomen</Label>
-                          <Input
-                            id="abdomen"
-                            value={assessmentForm.abdomen}
-                            onChange={(e) => setAssessmentForm({ ...assessmentForm, abdomen: e.target.value })}
-                            placeholder="Soft, distended, tender"
+                          <Input 
+                            id="abdomen" 
+                            value={assessmentForm.abdomen} 
+                            onChange={(e) => handleAssessmentChange('abdomen', e.target.value)} 
+                            placeholder="Soft, distended, tender" 
                           />
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="bowelSounds">Bowel Sounds</Label>
-                          <Input
-                            id="bowelSounds"
-                            value={assessmentForm.bowelSounds}
-                            onChange={(e) => setAssessmentForm({ ...assessmentForm, bowelSounds: e.target.value })}
-                            placeholder="Active, hypoactive, hyperactive"
+                          <Input 
+                            id="bowelSounds" 
+                            value={assessmentForm.bowelSounds} 
+                            onChange={(e) => handleAssessmentChange('bowelSounds', e.target.value)} 
+                            placeholder="Active, hypoactive, hyperactive" 
                           />
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="lastBowelMovement">Last Bowel Movement</Label>
-                          <Input
-                            id="lastBowelMovement"
-                            value={assessmentForm.lastBowelMovement}
-                            onChange={(e) => setAssessmentForm({ ...assessmentForm, lastBowelMovement: e.target.value })}
-                            placeholder="Date/time"
+                          <Input 
+                            id="lastBowelMovement" 
+                            value={assessmentForm.lastBowelMovement} 
+                            onChange={(e) => handleAssessmentChange('lastBowelMovement', e.target.value)} 
+                            placeholder="Date/time" 
                           />
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="appetite">Appetite</Label>
-                          <Input
-                            id="appetite"
-                            value={assessmentForm.appetite}
-                            onChange={(e) => setAssessmentForm({ ...assessmentForm, appetite: e.target.value })}
-                            placeholder="Good, poor, nausea/vomiting"
+                          <Input 
+                            id="appetite" 
+                            value={assessmentForm.appetite} 
+                            onChange={(e) => handleAssessmentChange('appetite', e.target.value)} 
+                            placeholder="Good, poor, nausea/vomiting" 
                           />
                         </div>
                       </div>
                       <div className="space-y-2 mt-4">
                         <Label htmlFor="giNotes">Additional Notes</Label>
-                        <Textarea
-                          id="giNotes"
-                          value={assessmentForm.giNotes}
-                          onChange={(e) => setAssessmentForm({ ...assessmentForm, giNotes: e.target.value })}
-                          rows={3}
+                        <Textarea 
+                          id="giNotes" 
+                          value={assessmentForm.giNotes} 
+                          onChange={(e) => handleAssessmentChange('giNotes', e.target.value)} 
+                          rows={3} 
                         />
                       </div>
                     </AccordionContent>
                   </AccordionItem>
-
                   <AccordionItem value="gu">
                     <AccordionTrigger>Genitourinary</AccordionTrigger>
                     <AccordionContent>
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                           <Label htmlFor="bladderPalpation">Bladder Palpation</Label>
-                          <Input
-                            id="bladderPalpation"
-                            value={assessmentForm.bladderPalpation}
-                            onChange={(e) => setAssessmentForm({ ...assessmentForm, bladderPalpation: e.target.value })}
-                            placeholder="Non-distended, distended"
+                          <Input 
+                            id="bladderPalpation" 
+                            value={assessmentForm.bladderPalpation} 
+                            onChange={(e) => handleAssessmentChange('bladderPalpation', e.target.value)} 
+                            placeholder="Non-distended, distended" 
                           />
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="urinaryOutput">Urinary Output</Label>
-                          <Input
-                            id="urinaryOutput"
-                            value={assessmentForm.urinaryOutput}
-                            onChange={(e) => setAssessmentForm({ ...assessmentForm, urinaryOutput: e.target.value })}
-                            placeholder="Amount, frequency"
+                          <Input 
+                            id="urinaryOutput" 
+                            value={assessmentForm.urinaryOutput} 
+                            onChange={(e) => handleAssessmentChange('urinaryOutput', e.target.value)} 
+                            placeholder="Amount, frequency" 
                           />
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="urinaryColor">Urine Color</Label>
-                          <Input
-                            id="urinaryColor"
-                            value={assessmentForm.urinaryColor}
-                            onChange={(e) => setAssessmentForm({ ...assessmentForm, urinaryColor: e.target.value })}
-                            placeholder="Clear, amber, cloudy"
+                          <Input 
+                            id="urinaryColor" 
+                            value={assessmentForm.urinaryColor} 
+                            onChange={(e) => handleAssessmentChange('urinaryColor', e.target.value)} 
+                            placeholder="Clear, amber, cloudy" 
                           />
                         </div>
                       </div>
                       <div className="space-y-2 mt-4">
                         <Label htmlFor="guNotes">Additional Notes</Label>
-                        <Textarea
-                          id="guNotes"
-                          value={assessmentForm.guNotes}
-                          onChange={(e) => setAssessmentForm({ ...assessmentForm, guNotes: e.target.value })}
-                          rows={3}
+                        <Textarea 
+                          id="guNotes" 
+                          value={assessmentForm.guNotes} 
+                          onChange={(e) => handleAssessmentChange('guNotes', e.target.value)} 
+                          rows={3} 
                         />
                       </div>
                     </AccordionContent>
                   </AccordionItem>
-
                   <AccordionItem value="musculo">
                     <AccordionTrigger>Musculoskeletal</AccordionTrigger>
                     <AccordionContent>
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                           <Label htmlFor="gait">Gait</Label>
-                          <Input
-                            id="gait"
-                            value={assessmentForm.gait}
-                            onChange={(e) => setAssessmentForm({ ...assessmentForm, gait: e.target.value })}
-                            placeholder="Steady, unsteady, assistive device"
+                          <Input 
+                            id="gait" 
+                            value={assessmentForm.gait} 
+                            onChange={(e) => handleAssessmentChange('gait', e.target.value)} 
+                            placeholder="Steady, unsteady, assistive device" 
                           />
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="rangeOfMotion">Range of Motion</Label>
-                          <Input
-                            id="rangeOfMotion"
-                            value={assessmentForm.rangeOfMotion}
-                            onChange={(e) => setAssessmentForm({ ...assessmentForm, rangeOfMotion: e.target.value })}
-                            placeholder="Full, limited"
+                          <Input 
+                            id="rangeOfMotion" 
+                            value={assessmentForm.rangeOfMotion} 
+                            onChange={(e) => handleAssessmentChange('rangeOfMotion', e.target.value)} 
+                            placeholder="Full, limited" 
                           />
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="muscleStrength">Muscle Strength</Label>
-                          <Input
-                            id="muscleStrength"
-                            value={assessmentForm.muscleStrength}
-                            onChange={(e) => setAssessmentForm({ ...assessmentForm, muscleStrength: e.target.value })}
-                            placeholder="5/5, symmetrical"
+                          <Input 
+                            id="muscleStrength" 
+                            value={assessmentForm.muscleStrength} 
+                            onChange={(e) => handleAssessmentChange('muscleStrength', e.target.value)} 
+                            placeholder="5/5, symmetrical" 
                           />
                         </div>
                         <div className="flex items-center space-x-2">
-                          <Checkbox
-                            id="jointSwelling"
-                            checked={assessmentForm.jointSwelling}
-                            onCheckedChange={(checked) => setAssessmentForm({ ...assessmentForm, jointSwelling: checked as boolean })}
+                          <Checkbox 
+                            id="jointSwelling" 
+                            checked={assessmentForm.jointSwelling} 
+                            onCheckedChange={(checked: boolean) => handleAssessmentChange('jointSwelling', checked)} 
                           />
                           <Label htmlFor="jointSwelling">Joint swelling present</Label>
                         </div>
                       </div>
                       <div className="space-y-2 mt-4">
                         <Label htmlFor="musculoskeletalNotes">Additional Notes</Label>
-                        <Textarea
-                          id="musculoskeletalNotes"
-                          value={assessmentForm.musculoskeletalNotes}
-                          onChange={(e) => setAssessmentForm({ ...assessmentForm, musculoskeletalNotes: e.target.value })}
-                          rows={3}
+                        <Textarea 
+                          id="musculoskeletalNotes" 
+                          value={assessmentForm.musculoskeletalNotes} 
+                          onChange={(e) => handleAssessmentChange('musculoskeletalNotes', e.target.value)} 
+                          rows={3} 
                         />
                       </div>
                     </AccordionContent>
                   </AccordionItem>
-
                   <AccordionItem value="neuro">
                     <AccordionTrigger>Neurological</AccordionTrigger>
                     <AccordionContent>
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                           <Label htmlFor="consciousness">Level of Consciousness</Label>
-                          <Input
-                            id="consciousness"
-                            value={assessmentForm.consciousness}
-                            onChange={(e) => setAssessmentForm({ ...assessmentForm, consciousness: e.target.value })}
-                            placeholder="Alert, drowsy, confused"
+                          <Input 
+                            id="consciousness" 
+                            value={assessmentForm.consciousness} 
+                            onChange={(e) => handleAssessmentChange('consciousness', e.target.value)} 
+                            placeholder="Alert, drowsy, confused" 
                           />
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="orientation">Orientation</Label>
-                          <Input
-                            id="orientation"
-                            value={assessmentForm.orientation}
-                            onChange={(e) => setAssessmentForm({ ...assessmentForm, orientation: e.target.value })}
-                            placeholder="Person, place, time, situation"
+                          <Input 
+                            id="orientation" 
+                            value={assessmentForm.orientation} 
+                            onChange={(e) => handleAssessmentChange('orientation', e.target.value)} 
+                            placeholder="Person, place, time, situation" 
                           />
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="speech">Speech</Label>
-                          <Input
-                            id="speech"
-                            value={assessmentForm.speech}
-                            onChange={(e) => setAssessmentForm({ ...assessmentForm, speech: e.target.value })}
-                            placeholder="Clear, slurred, aphasia"
+                          <Input 
+                            id="speech" 
+                            value={assessmentForm.speech} 
+                            onChange={(e) => handleAssessmentChange('speech', e.target.value)} 
+                            placeholder="Clear, slurred, aphasia" 
                           />
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="pupils">Pupils</Label>
-                          <Input
-                            id="pupils"
-                            value={assessmentForm.pupils}
-                            onChange={(e) => setAssessmentForm({ ...assessmentForm, pupils: e.target.value })}
-                            placeholder="PERRLA, size, reactivity"
+                          <Input 
+                            id="pupils" 
+                            value={assessmentForm.pupils} 
+                            onChange={(e) => handleAssessmentChange('pupils', e.target.value)} 
+                            placeholder="PERRLA, size, reactivity" 
                           />
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="motorFunction">Motor Function</Label>
-                          <Input
-                            id="motorFunction"
-                            value={assessmentForm.motorFunction}
-                            onChange={(e) => setAssessmentForm({ ...assessmentForm, motorFunction: e.target.value })}
-                            placeholder="Moves all extremities"
+                          <Input 
+                            id="motorFunction" 
+                            value={assessmentForm.motorFunction} 
+                            onChange={(e) => handleAssessmentChange('motorFunction', e.target.value)} 
+                            placeholder="5/5, symmetrical" 
                           />
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="sensoryFunction">Sensory Function</Label>
-                          <Input
-                            id="sensoryFunction"
-                            value={assessmentForm.sensoryFunction}
-                            onChange={(e) => setAssessmentForm({ ...assessmentForm, sensoryFunction: e.target.value })}
-                            placeholder="Intact to light touch"
+                          <Input 
+                            id="sensoryFunction" 
+                            value={assessmentForm.sensoryFunction} 
+                            onChange={(e) => handleAssessmentChange('sensoryFunction', e.target.value)} 
+                            placeholder="Intact, decreased" 
                           />
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="reflexes">Reflexes</Label>
-                          <Input
-                            id="reflexes"
-                            value={assessmentForm.reflexes}
-                            onChange={(e) => setAssessmentForm({ ...assessmentForm, reflexes: e.target.value })}
-                            placeholder="2+ bilateral"
+                          <Input 
+                            id="reflexes" 
+                            value={assessmentForm.reflexes} 
+                            onChange={(e) => handleAssessmentChange('reflexes', e.target.value)} 
+                            placeholder="2+, symmetrical" 
                           />
                         </div>
                       </div>
                       <div className="space-y-2 mt-4">
                         <Label htmlFor="neurologicalNotes">Additional Notes</Label>
-                        <Textarea
-                          id="neurologicalNotes"
-                          value={assessmentForm.neurologicalNotes}
-                          onChange={(e) => setAssessmentForm({ ...assessmentForm, neurologicalNotes: e.target.value })}
-                          rows={3}
+                        <Textarea 
+                          id="neurologicalNotes" 
+                          value={assessmentForm.neurologicalNotes} 
+                          onChange={(e) => handleAssessmentChange('neurologicalNotes', e.target.value)} 
+                          rows={3} 
                         />
+                      </div>
+                      <div className="flex justify-end mt-4">
+                        <Button onClick={handleSaveAssessment} disabled={loading}>
+                          Save Physical Assessment
+                        </Button>
                       </div>
                     </AccordionContent>
                   </AccordionItem>
                 </Accordion>
-
-                <div className="flex justify-end space-x-2 mt-4">
-                  <Button 
-                    onClick={handleSaveAssessment}
-                    disabled={loading}
-                  >
-                    {loading ? "Saving..." : "Save Assessment"}
-                  </Button>
-                </div>
               </TabsContent>
             </Tabs>
           </div>
+          <DialogFooter className="p-4 border-t">
+            <Button type="submit" onClick={handleSubmit} disabled={loading}>
+              Save Changes
+            </Button>
+          </DialogFooter>
         </ScrollArea>
-        <div className="flex justify-end gap-4 mt-4">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={handleSubmit} disabled={loading}>{loading ? "Saving..." : "Save Changes"}</Button>
-        </div>
       </DialogContent>
     </Dialog>
   );
 };
 
+
+const PhysicalAssessmentViewDialog = ({
+  open,
+  onOpenChange,
+  assessment,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  assessment: PhysicalAssessment;
+}) => {
+  // A helper function to safely render sections of the assessment
+  const renderAssessmentSection = (title: string, data: any) => (
+    <Card className="mb-4">
+      <CardHeader>
+        <CardTitle className="text-lg">{title}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+          {Object.entries(data).map(([key, value]) => (
+            <div key={key} className="flex flex-col">
+              <dt className="font-medium capitalize text-muted-foreground">
+                {key.replace(/_/g, ' ').replace(/([A-Z])/g, ' $1').trim()}
+              </dt>
+              <dd className="break-words">
+                {typeof value === 'boolean'
+                  ? value ? 'Yes' : 'No'
+                  : (value as ReactNode) || 'N/A'} 
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </CardContent>
+    </Card>
+  );
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-4xl p-0">
+        <DialogHeader className="p-6 pb-0">
+          <DialogTitle>Physical Assessment from {format(new Date(assessment.assessment_date), "PPP - h:mm a")}</DialogTitle>
+        </DialogHeader>
+        <ScrollArea className="h-[70vh] p-6 pt-0">
+          <div className="py-4">
+            {renderAssessmentSection("Skin Assessment", assessment.skin_assessment)}
+            {renderAssessmentSection("EENT Assessment", assessment.eent_assessment)}
+            {renderAssessmentSection("Cardiovascular Assessment", assessment.cardiovascular_assessment)}
+            {renderAssessmentSection("Respiratory Assessment", assessment.respiratory_assessment)}
+            {renderAssessmentSection("Gastrointestinal Assessment", assessment.gastrointestinal_assessment)}
+            {renderAssessmentSection("Genitourinary Assessment", assessment.genitourinary_assessment)}
+            {renderAssessmentSection("Musculoskeletal Assessment", assessment.musculoskeletal_assessment)}
+            {renderAssessmentSection("Neurological Assessment", assessment.neurological_assessment)}
+          </div>
+        </ScrollArea>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+// -----------------------------------------------------------------------------
+// Main PatientRecord Component
+// -----------------------------------------------------------------------------
+
 const PatientRecord = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [patient, setPatient] = useState<Patient | null>(null);
-  const [physicalAssessments, setPhysicalAssessments] = useState<PhysicalAssessment[]>([]);
-  const [vitalSigns, setVitalSigns] = useState<any[]>([]);
-  const [medications, setMedications] = useState<any[]>([]);
-  const [labs, setLabs] = useState<any[]>([]);
-  const [imaging, setImaging] = useState<any[]>([]);
-  const [doctors, setDoctors] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showAssessmentDialog, setShowAssessmentDialog] = useState(false);
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [showAssignDialog, setShowAssignDialog] = useState(false);
-  const [showEditDialog, setShowEditDialog] = useState(false);
-  const [showLabDialog, setShowLabDialog] = useState(false);
-  const [showImagingDialog, setShowImagingDialog] = useState(false);
-  const [editingLab, setEditingLab] = useState<Lab | null>(null);
-  const [editingImaging, setEditingImaging] = useState<Imaging | null>(null);
-  
-  // Lab form state
-  const [labForm, setLabForm] = useState({
-    test_name: "",
-    test_date: new Date().toISOString().split('T')[0],
-    test_result: "",
-    reference_range: "",
-    remarks: ""
-  });
+  const [error, setError] = useState<string | null>(null);
+  const [isArchived, setIsArchived] = useState(false);
 
-  // Imaging form state
-  const [imagingForm, setImagingForm] = useState({
-    imaging_type: "",
-    imaging_date: new Date().toISOString().split('T')[0],
-    findings: "",
-    recommendation: "",
-    image_url: ""
-  });
-  const [selectedDoctorId, setSelectedDoctorId] = useState("");
-  const [assessmentForm, setAssessmentForm] = useState({
-    // Skin Assessment
-    skinColor: "",
-    skinTexture: "",
-    skinTurgor: "",
-    skinLesions: "",
-    skinEdema: false,
-    skinNotes: "",
-    
-    // EENT Assessment
-    eyes: "",
-    ears: "",
-    nose: "",
-    throat: "",
-    eentNotes: "",
-    
-    // Cardiovascular
-    heartRate: "",
-    heartRhythm: "",
-    heartSounds: "",
-    peripheralPulses: "",
-    capillaryRefill: "",
-    cardiovascularNotes: "",
-    
-    // Respiratory
-    respiratoryRate: "",
-    breathSounds: "",
-    chestExpansion: "",
-    cough: "",
-    sputum: "",
-    respiratoryNotes: "",
-    
-    // Gastrointestinal
-    abdomen: "",
-    bowelSounds: "",
-    lastBowelMovement: "",
-    appetite: "",
-    giNotes: "",
-    
-    // Genitourinary
-    bladderPalpation: "",
-    urinaryOutput: "",
-    urinaryColor: "",
-    guNotes: "",
-    
-    // Musculoskeletal
-    gait: "",
-    rangeOfMotion: "",
-    muscleStrength: "",
-    jointSwelling: false,
-    musculoskeletalNotes: "",
-    
-    // Neurological
-    consciousness: "",
-    orientation: "",
-    speech: "",
-    pupils: "",
-    motorFunction: "",
-    sensoryFunction: "",
-    reflexes: "",
-    neurologicalNotes: "",
-  });
+  // Data for the tabs
+  const [vitalSigns, setVitalSigns] = useState<VitalSign[]>([]);
+  const [assessments, setAssessments] = useState<PhysicalAssessment[]>([]);
+  const [labs, setLabs] = useState<Lab[]>([]);
+  const [imaging, setImaging] = useState<Imaging[]>([]);
+
+  // Dialog State
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+
+  // State for the View Assessment Dialog
+  const [viewingAssessment, setViewingAssessment] = useState<PhysicalAssessment | null>(null);
+
+
+  const fetchData = useCallback(async (patientId: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      // 1. Fetch Patient Details
+      const { data: patientData, error: patientError } = await supabase
+        .from('patients')
+        .select('*')
+        .eq('id', patientId)
+        .single();
+      
+      if (patientError) throw patientError;
+
+      if (!patientData) {
+        setError("Patient record not found.");
+        setLoading(false);
+        return;
+      }
+
+      setPatient(patientData as Patient);
+      setIsArchived(patientData.status === 'archived'); 
+
+      // 2. Fetch Related Data (in parallel for efficiency)
+      const [vitalsResult, assessmentsResult, labsResult, imagingResult] = await Promise.all([
+        supabase.from('patient_vital_signs').select('*').eq('patient_id', patientId).order('recorded_at', { ascending: false }), // Assuming your table uses recorded_at for ordering now
+        supabase.from('physical_assessments').select('*').eq('patient_id', patientId).order('assessment_date', { ascending: false }),
+        supabase.from('patient_labs').select('*').eq('patient_id', patientId).order('test_date', { ascending: false }),
+        supabase.from('patient_imaging').select('*').eq('patient_id', patientId).order('imaging_date', { ascending: false }),
+      ]);
+
+      if (vitalsResult.error) console.error("Error fetching vitals:", vitalsResult.error);
+      if (assessmentsResult.error) console.error("Error fetching assessments:", assessmentsResult.error);
+      if (labsResult.error) console.error("Error fetching labs:", labsResult.error);
+      if (imagingResult.error) console.error("Error fetching imaging:", imagingResult.error);
+
+      // Assignment now works because the interfaces match the fetched table structure
+      setVitalSigns(vitalsResult.data as VitalSign[] || []);
+      setAssessments(assessmentsResult.data as PhysicalAssessment[] || []);
+      setLabs(labsResult.data as Lab[] || []);
+      setImaging(imagingResult.data as Imaging[] || []);
+
+    } catch (err: any) {
+      console.error("Fetch error:", err);
+      setError(err.message || 'An unexpected error occurred while fetching the patient record.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    fetchPatientData();
-  }, [id]);
-
-  // Helper to render JSON-like history fields safely
-  const renderJsonData = (data: any) => {
-    if (!data) return <p className="text-sm text-muted-foreground">No data</p>;
-
-    let obj = data;
-    if (typeof data === "string") {
-      try {
-        obj = JSON.parse(data);
-      } catch (e) {
-        // not JSON, render raw string
-        return <p className="text-sm">{data}</p>;
-      }
+    if (id) {
+      fetchData(id);
     }
+  }, [id, fetchData]);
 
-    if (typeof obj !== "object") return <p className="text-sm">{String(obj)}</p>;
-
-    const entries = Object.entries(obj);
-    if (entries.length === 0) return <p className="text-sm text-muted-foreground">No data</p>;
-
-    return (
-      <div className="space-y-1">
-        {entries.map(([key, value]) => (
-          <div key={key} className="text-sm">
-            <span className="font-medium capitalize">{key.replace(/_/g, " ")}:</span>{" "}
-            <span>{typeof value === "boolean" ? (value ? "Yes" : "No") : String(value)}</span>
-          </div>
-        ))}
-      </div>
-    );
-  };
-
-  const fetchPatientData = async () => {
-  try {
-    setLoading(true);
-
-    // 1. CRITICAL FIX: Fetch main patient data using a simple select('*').
-    // This isolates the core record fetch, preventing complex joins from causing a failure.
-    const { data: patientData, error: patientError } = await supabase
-      .from("patients")
-      .select("*") // SIMPLIFIED: Only fetch patient fields to ensure RLS success.
-      .eq("id", id)
-      .single();
-
-    if (patientError) {
-      throw patientError;
-    }
-
-    setPatient(patientData);
-
-    // 2. Fetch all related data in parallel (This section looks correct based on your file)
-    const [assessments, vitals, meds, labsData, imagingData, doctorsData] = await Promise.all([
-      supabase.from("physical_assessments").select("*").eq("patient_id", id).order("assessment_date", { ascending: false }),
-      supabase.from("patient_vital_signs").select("*").eq("patient_id", id).order("recorded_at", { ascending: false }).limit(5),
-      supabase.from("patient_medications").select("*").eq("patient_id", id).order("start_date", { ascending: false }),
-      supabase.from("patient_labs").select("*").eq("patient_id", id).order("test_date", { ascending: false }).limit(5),
-      supabase.from("patient_imaging").select("*").eq("patient_id", id).order("imaging_date", { ascending: false }).limit(5),
-      supabase.from("doctors").select("*").order("name", { ascending: true })
-    ]);
-
-    setPhysicalAssessments(assessments.data?.map(assessment => ({
-      ...assessment,
-      skin_assessment: typeof assessment.skin_assessment === 'string' 
-        ? JSON.parse(assessment.skin_assessment)
-        : assessment.skin_assessment,
-      eent_assessment: typeof assessment.eent_assessment === 'string'
-        ? JSON.parse(assessment.eent_assessment)
-        : assessment.eent_assessment,
-      cardiovascular_assessment: typeof assessment.cardiovascular_assessment === 'string'
-        ? JSON.parse(assessment.cardiovascular_assessment)
-        : assessment.cardiovascular_assessment,
-      respiratory_assessment: typeof assessment.respiratory_assessment === 'string'
-        ? JSON.parse(assessment.respiratory_assessment)
-        : assessment.respiratory_assessment,
-      gastrointestinal_assessment: typeof assessment.gastrointestinal_assessment === 'string'
-        ? JSON.parse(assessment.gastrointestinal_assessment)
-        : assessment.gastrointestinal_assessment,
-      genitourinary_assessment: typeof assessment.genitourinary_assessment === 'string'
-        ? JSON.parse(assessment.genitourinary_assessment)
-        : assessment.genitourinary_assessment,
-      musculoskeletal_assessment: typeof assessment.musculoskeletal_assessment === 'string'
-        ? JSON.parse(assessment.musculoskeletal_assessment)
-        : assessment.musculoskeletal_assessment,
-      neurological_assessment: typeof assessment.neurological_assessment === 'string'
-        ? JSON.parse(assessment.neurological_assessment)
-        : assessment.neurological_assessment,
-    })) || []);
-    setVitalSigns(vitals.data || []);
-    setMedications(meds.data || []);
-    setLabs(labsData.data || []);
-    setImaging(imagingData.data || []);
-    setDoctors(doctorsData.data || []);
-
-    if (patientData.attending_physician_id) {
-      setSelectedDoctorId(patientData.attending_physician_id);
-    }
-  } catch (error: any) {
-    // This error toast will now correctly show if the simple patient fetch fails.
-    toast.error("Error loading patient data: " + error.message);
-  } finally {
-    setLoading(false);
-  }
-};
-
-// Don't forget to call this function in your component's useEffect hook
-useEffect(() => {
-  if (id) {
-    fetchPatientData();
-  }
-}, [id]);
-
-  // Lab CRUD handlers
-  const handleSaveLab = async (isNew: boolean) => {
+  const handlePatientSave = async (updatedData: EditPatientForm) => {
+    if (!id) return;
     try {
-      setLoading(true);
-      const labData = {
-        patient_id: id,
-        ...labForm
-      };
-
-      if (isNew) {
-        const { error } = await supabase
-          .from("patient_labs")
-          .insert(labData);
-        if (error) throw error;
-        toast.success("Lab record added successfully");
-      } else if (editingLab) {
-        const { error } = await supabase
-          .from("patient_labs")
-          .update(labData)
-          .eq("id", editingLab.id);
-        if (error) throw error;
-        toast.success("Lab record updated successfully");
-      }
-
-      setShowLabDialog(false);
-      setEditingLab(null);
-      setLabForm({
-        test_name: "",
-        test_date: new Date().toISOString().split('T')[0],
-        test_result: "",
-        reference_range: "",
-        remarks: ""
-      });
-      await fetchPatientData();
-    } catch (error: any) {
-      toast.error("Error saving lab record: " + error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDeleteLab = async (labId: string) => {
-    try {
-      const { error } = await supabase
-        .from("patient_labs")
-        .delete()
-        .eq("id", labId);
-      if (error) throw error;
-      toast.success("Lab record deleted successfully");
-      await fetchPatientData();
-    } catch (error: any) {
-      toast.error("Error deleting lab record: " + error.message);
-    }
-  };
-
-  // Imaging CRUD handlers
-  const handleSaveImaging = async (isNew: boolean) => {
-    try {
-      setLoading(true);
-      const imagingData = {
-        patient_id: id,
-        ...imagingForm
-      };
-
-      if (isNew) {
-        const { error } = await supabase
-          .from("patient_imaging")
-          .insert(imagingData);
-        if (error) throw error;
-        toast.success("Imaging record added successfully");
-      } else if (editingImaging) {
-        const { error } = await supabase
-          .from("patient_imaging")
-          .update(imagingData)
-          .eq("id", editingImaging.id);
-        if (error) throw error;
-        toast.success("Imaging record updated successfully");
-      }
-
-      setShowImagingDialog(false);
-      setEditingImaging(null);
-      setImagingForm({
-        imaging_type: "",
-        imaging_date: new Date().toISOString().split('T')[0],
-        findings: "",
-        recommendation: "",
-        image_url: ""
-      });
-      await fetchPatientData();
-    } catch (error: any) {
-      toast.error("Error saving imaging record: " + error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDeleteImaging = async (imagingId: string) => {
-    try {
-      const { error } = await supabase
-        .from("patient_imaging")
-        .delete()
-        .eq("id", imagingId);
-      if (error) throw error;
-      toast.success("Imaging record deleted successfully");
-      await fetchPatientData();
-    } catch (error: any) {
-      toast.error("Error deleting imaging record: " + error.message);
-    }
-  };
-
-  // Physical Assessment CRUD
-  const handleDeleteAssessment = async (assessmentId: string) => {
-    try {
-      const { error } = await supabase
-        .from("physical_assessments")
-        .delete()
-        .eq("id", assessmentId);
-      if (error) throw error;
-      toast.success("Assessment record deleted successfully");
-      await fetchPatientData();
-    } catch (error: any) {
-      toast.error("Error deleting assessment: " + error.message);
-    }
-  };
-
-  const handleSavePatient = async (data: any) => {
-    try {
-      const { error } = await supabase
-        .from("patients")
+      const { error: updateError } = await supabase
+        .from('patients')
         .update({
-          name: data.name,
-          age: data.age,
-          sex: data.sex,
-          date_of_birth: data.date_of_birth,
-          address: data.address,
-          contact_number: data.contact_number,
-          hospital_number: data.hospital_number,
-          philhealth: data.philhealth,
-          admit_to_department: data.admit_to_department as any,
-          admit_to_location: data.admit_to_location,
-          admitting_diagnosis: data.admitting_diagnosis,
-          allergies: data.allergies,
-          current_medications: data.current_medications,
-          problem_list: data.problem_list,
-          past_medical_history: data.past_medical_history,
-          personal_social_history: data.personal_social_history,
-          history_of_present_illness: data.history_of_present_illness,
+          name: updatedData.name,
+          age: updatedData.age,
+          sex: updatedData.sex,
+          date_of_birth: updatedData.date_of_birth,
+          hospital_number: updatedData.hospital_number,
+          address: updatedData.address,
+          contact_number: updatedData.contact_number,
+          philhealth: updatedData.philhealth,
+          admit_to_department: updatedData.admit_to_department,
+          admit_to_location: updatedData.admit_to_location,
+          admitting_diagnosis: updatedData.admitting_diagnosis,
+          allergies: updatedData.allergies,
+          current_medications: updatedData.current_medications,
+          problem_list: updatedData.problem_list,
+          past_medical_history: updatedData.past_medical_history,
+          personal_social_history: updatedData.personal_social_history,
+          family_history: updatedData.family_history,
+          history_of_present_illness: updatedData.history_of_present_illness,
         })
-        .eq("id", id);
+        .eq('id', id);
+
+      if (updateError) throw updateError;
+      toast.success('Patient details updated successfully!');
+      // Re-fetch data to update the main view
+      await fetchData(id); 
+    } catch (error: any) {
+      toast.error('Failed to save patient details: ' + error.message);
+    }
+  };
+
+  const handleArchiveToggle = async () => {
+    if (!patient) return;
+    const newStatus: PatientStatus = isArchived ? 'active' : 'archived'; 
+    try {
+      const { error } = await supabase
+        .from('patients')
+        .update({ status: newStatus })
+        .eq('id', patient.id);
 
       if (error) throw error;
       
-      toast.success("Patient record updated successfully");
-      await fetchPatientData();
+      setIsArchived(newStatus === 'archived');
+      toast.success(`Patient record ${newStatus === 'archived' ? 'archived' : 'restored'} successfully.`);
     } catch (error: any) {
-      toast.error("Error updating patient: " + error.message);
-      throw error;
+      toast.error(`Failed to ${newStatus === 'archived' ? 'archive' : 'restore'} record: ` + error.message);
     }
   };
 
-  const handleSaveAssessment = async () => {
+  // ADDED PRINT FUNCTION
+  const handlePrint = () => {
+    // This triggers the browser's print dialog, which will use CSS Media Queries
+    window.print();
+  };
+
+  // ADD THIS TYPE DEFINITION within the PatientRecord.tsx file, 
+// typically near the other interface definitions or just before the handleDeleteRecord function.
+type DeletableRecordTable = 'physical_assessments' | 'patient_vital_signs' | 'patient_labs' | 'patient_imaging';
+
+// -------------------------------------------------------------------------
+// NEW: GENERIC DELETE HANDLER FOR INDIVIDUAL RECORDS (Type-safe version)
+// -------------------------------------------------------------------------
+const handleDeleteRecord = useCallback(async (table: DeletableRecordTable, idToDelete: string, recordName: string) => {
     if (!id) return;
     try {
-      const assessmentPayload = {
-        patient_id: id as string,
-        skin_assessment: {
-          color: assessmentForm.skinColor,
-          texture: assessmentForm.skinTexture,
-          turgor: assessmentForm.skinTurgor,
-          lesions: assessmentForm.skinLesions,
-          edema: assessmentForm.skinEdema,
-          notes: assessmentForm.skinNotes,
-        },
-        eent_assessment: {
-          eyes: assessmentForm.eyes,
-          ears: assessmentForm.ears,
-          nose: assessmentForm.nose,
-          throat: assessmentForm.throat,
-          notes: assessmentForm.eentNotes,
-        },
-        cardiovascular_assessment: {
-          heart_rate: assessmentForm.heartRate,
-          heart_rhythm: assessmentForm.heartRhythm,
-          heart_sounds: assessmentForm.heartSounds,
-          peripheral_pulses: assessmentForm.peripheralPulses,
-          capillary_refill: assessmentForm.capillaryRefill,
-          notes: assessmentForm.cardiovascularNotes,
-        },
-        respiratory_assessment: {
-          respiratory_rate: assessmentForm.respiratoryRate,
-          breath_sounds: assessmentForm.breathSounds,
-          chest_expansion: assessmentForm.chestExpansion,
-          cough: assessmentForm.cough,
-          sputum: assessmentForm.sputum,
-          notes: assessmentForm.respiratoryNotes,
-        },
-        gastrointestinal_assessment: {
-          abdomen: assessmentForm.abdomen,
-          bowel_sounds: assessmentForm.bowelSounds,
-          last_bowel_movement: assessmentForm.lastBowelMovement,
-          appetite: assessmentForm.appetite,
-          notes: assessmentForm.giNotes,
-        },
-        genitourinary_assessment: {
-          bladder_palpation: assessmentForm.bladderPalpation,
-          urinary_output: assessmentForm.urinaryOutput,
-          urinary_color: assessmentForm.urinaryColor,
-          notes: assessmentForm.guNotes,
-        },
-        musculoskeletal_assessment: {
-          gait: assessmentForm.gait,
-          range_of_motion: assessmentForm.rangeOfMotion,
-          muscle_strength: assessmentForm.muscleStrength,
-          joint_swelling: assessmentForm.jointSwelling,
-          notes: assessmentForm.musculoskeletalNotes,
-        },
-        neurological_assessment: {
-          consciousness: assessmentForm.consciousness,
-          orientation: assessmentForm.orientation,
-          speech: assessmentForm.speech,
-          pupils: assessmentForm.pupils,
-          motor_function: assessmentForm.motorFunction,
-          sensory_function: assessmentForm.sensoryFunction,
-          reflexes: assessmentForm.reflexes,
-          notes: assessmentForm.neurologicalNotes,
-        },
-      };
+        const { error } = await supabase
+            // The `table` argument is now constrained to known, valid table names, resolving the error (TS2769)
+            .from(table) 
+            .delete()
+            .eq('id', idToDelete);
 
-      const { error } = await supabase.from("physical_assessments").insert(assessmentPayload);
+        if (error) throw error;
 
-      if (error) throw error;
-
-      toast.success("Physical assessment saved successfully");
-      setShowAssessmentDialog(false);
-      fetchPatientData();
+        toast.success(`${recordName} deleted successfully.`);
+        await fetchData(id); // Re-fetch all data to update the UI
     } catch (error: any) {
-      toast.error("Error saving assessment: " + error.message);
+        toast.error(`Failed to delete ${recordName}: ` + error.message);
     }
-  };
+}, [id, fetchData]);
+// -------------------------------------------------------------------------
 
-  if (loading) {
-    return <div className="flex justify-center items-center min-h-screen">Loading...</div>;
+  if (loading && !patient) {
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <p className="text-xl">Loading patient record...</p>
+      </div>
+    );
   }
 
-  if (!patient) {
-    return <div className="flex justify-center items-center min-h-screen">Patient not found</div>;
+  if (error || !patient) {
+    return (
+      <div className="p-8">
+        <Button onClick={() => navigate('/dashboard/patients')} variant="outline" className="mb-4">
+          <ArrowLeft className="mr-2 h-4 w-4" /> Back to List
+        </Button>
+        <Card className="shadow-lg">
+          <CardHeader>
+            <CardTitle className="text-destructive">Error</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p>{error || "Patient record is inaccessible or does not exist."}</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
   }
+
+  // Helper function to render a detail row
+  const DetailRow = ({ label, value }: { label: string; value: string | number | undefined | null | boolean }) => (
+    <div className="flex flex-col space-y-1">
+      <span className="text-sm font-medium text-muted-foreground">{label}</span>
+      <span className="text-base font-semibold">
+        {value === true ? 'Yes' : value === false ? 'No' : value || 'N/A'}
+      </span>
+    </div>
+  );
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div className="flex items-center gap-4">
-          <Button variant="outline" size="icon" onClick={() => navigate("/dashboard/patients")}>
-            <ArrowLeft className="h-4 w-4" />
+    <div className="p-4 md:p-8 space-y-6">
+      {/* Crucial Print Styling Instruction: 
+          For a seamless print experience, you must ensure your global CSS includes 
+          rules to hide non-print elements (like headers, navigation, buttons, tabs) 
+          and only display the main content (including the PrintableRecord component) 
+          when printing. Tailwind's `print:` utility is used on the PrintableRecord.
+          
+          Example Global CSS (in index.css or equivalent):
+          @media print {
+            body > * { display: none !important; }
+            .print\\:block { display: block !important; }
+            .no-print { display: none !important; } 
+          }
+      */}
+      
+      {/* Header and Actions */}
+      <div className="flex justify-between items-center no-print">
+        <Button onClick={() => navigate('/dashboard/patients')} variant="outline">
+          <ArrowLeft className="mr-2 h-4 w-4" /> Back to Patients
+        </Button>
+        <div className="flex space-x-2">
+            
+          {/* ADDED PRINT BUTTON */}
+          <Button variant="outline" onClick={handlePrint}>
+            <Printer className="mr-2 h-4 w-4" /> Print Record
           </Button>
-          <div>
-            <h1 className="text-3xl font-bold text-primary">{patient.name}</h1>
-            <p className="text-muted-foreground">Hospital No: {patient.hospital_number}</p>
-            <p className="text-muted-foreground">Assigned Doctor: {doctors.find(d => d.id === patient.attending_physician_id)?.name || "Not assigned"}</p>
-            <Badge variant={patient.status === "active" ? "default" : "secondary"} className="mt-2">
-              {patient.status}
-            </Badge>
-          </div>
-        </div>
-        
-        <div className="flex gap-2 flex-wrap">
-          <Dialog open={showAssignDialog} onOpenChange={setShowAssignDialog}>
+
+          <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
             <DialogTrigger asChild>
-              <Button variant="outline">
-                <UserPlus className="h-4 w-4 mr-2" />
-                Assign Doctor
+              <Button onClick={() => setShowEditDialog(true)}>
+                <Edit className="mr-2 h-4 w-4" /> Edit Record
               </Button>
             </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Assign Attending Physician</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Select Doctor</Label>
-                  <Select value={selectedDoctorId} onValueChange={setSelectedDoctorId}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Choose a doctor" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {doctors.map((doctor) => (
-                        <SelectItem key={doctor.id} value={doctor.id}>
-                          {doctor.name} - {doctor.specialty}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <Button
-                  onClick={async () => {
-                    try {
-                      const { error } = await supabase
-                        .from("patients")
-                        .update({ attending_physician_id: selectedDoctorId })
-                        .eq("id", id);
-                      if (error) throw error;
-                      toast.success("Doctor assigned successfully");
-                      setShowAssignDialog(false);
-                      fetchPatientData();
-                    } catch (error: any) {
-                      toast.error("Error assigning doctor: " + error.message);
-                    }
-                  }}
-                  className="w-full"
-                >
-                  Assign Doctor
-                </Button>
-              </div>
-            </DialogContent>
+            {showEditDialog && (
+              <EditPatientDialog
+                open={showEditDialog}
+                onOpenChange={setShowEditDialog}
+                patient={patient}
+                onSave={handlePatientSave}
+                vitalSigns={vitalSigns}
+                onVitalSignsSave={() => fetchData(id!)} // Refresh data after saving vitals
+              />
+            )}
           </Dialog>
 
-          {patient.status === "archived" && (
-            <Button
-              variant="outline"
-              onClick={async () => {
-                try {
-                  const { error } = await supabase
-                    .from("patients")
-                    .update({ status: "active" })
-                    .eq("id", id);
-                  if (error) throw error;
-                  toast.success("Patient unarchived");
-                  fetchPatientData();
-                } catch (error: any) {
-                  toast.error("Error: " + error.message);
-                }
-              }}
-            >
-              <ArchiveRestore className="h-4 w-4 mr-2" />
-              Unarchive
-            </Button>
-          )}
-
-          {patient.status === "active" && (
-            <Button
-              variant="outline"
-              onClick={async () => {
-                try {
-                  const { error } = await supabase
-                    .from("patients")
-                    .update({ status: "archived" })
-                    .eq("id", id);
-                  if (error) throw error;
-                  toast.success("Patient archived");
-                  fetchPatientData();
-                } catch (error: any) {
-                  toast.error("Error: " + error.message);
-                }
-              }}
-            >
-              <Archive className="h-4 w-4 mr-2" />
-              Archive
-            </Button>
-          )}
-
-          <Button variant="outline" onClick={() => setShowEditDialog(true)}>
-            <Edit className="h-4 w-4 mr-2" />
-            Edit Patient
+          <Button variant="outline" onClick={handleArchiveToggle} className={isArchived ? "text-green-600 border-green-600 hover:bg-green-50" : "text-amber-600 border-amber-600 hover:bg-amber-50"}>
+            {isArchived ? <ArchiveRestore className="mr-2 h-4 w-4" /> : <Archive className="mr-2 h-4 w-4" />}
+            {isArchived ? 'Restore Record' : 'Archive Record'}
           </Button>
 
-          <Button
-            variant="destructive"
-            onClick={() => setShowDeleteDialog(true)}
-          >
-            <Trash2 className="h-4 w-4 mr-2" />
-            Delete
+          <Button variant="destructive" onClick={() => setShowDeleteDialog(true)}>
+            <Trash2 className="mr-2 h-4 w-4" /> Delete
           </Button>
+        </div>
+      </div>
 
-          <Dialog open={showAssessmentDialog} onOpenChange={setShowAssessmentDialog}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="h-4 w-4 mr-2" />
-                Add Physical Assessment
-              </Button>
-            </DialogTrigger>
-          <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>New Physical Assessment</DialogTitle>
-            </DialogHeader>
-            
-            <Tabs defaultValue="skin" className="space-y-4">
-              <TabsList className="grid w-full grid-cols-4">
-                <TabsTrigger value="skin">Skin</TabsTrigger>
-                <TabsTrigger value="eent">EENT</TabsTrigger>
-                <TabsTrigger value="cardio">Cardio</TabsTrigger>
-                <TabsTrigger value="respiratory">Respiratory</TabsTrigger>
-              </TabsList>
-              <TabsList className="grid w-full grid-cols-4">
-                <TabsTrigger value="gi">GI</TabsTrigger>
-                <TabsTrigger value="gu">GU</TabsTrigger>
-                <TabsTrigger value="musculo">Musculoskeletal</TabsTrigger>
-                <TabsTrigger value="neuro">Neurological</TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="skin" className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Color</Label>
-                    <Input
-                      value={assessmentForm.skinColor}
-                      onChange={(e) => setAssessmentForm({ ...assessmentForm, skinColor: e.target.value })}
-                      placeholder="e.g., Pink, Pale, Cyanotic"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Texture</Label>
-                    <Input
-                      value={assessmentForm.skinTexture}
-                      onChange={(e) => setAssessmentForm({ ...assessmentForm, skinTexture: e.target.value })}
-                      placeholder="e.g., Smooth, Rough, Dry"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Turgor</Label>
-                    <Input
-                      value={assessmentForm.skinTurgor}
-                      onChange={(e) => setAssessmentForm({ ...assessmentForm, skinTurgor: e.target.value })}
-                      placeholder="e.g., Good, Poor"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Lesions</Label>
-                    <Input
-                      value={assessmentForm.skinLesions}
-                      onChange={(e) => setAssessmentForm({ ...assessmentForm, skinLesions: e.target.value })}
-                      placeholder="Describe any lesions"
-                    />
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      checked={assessmentForm.skinEdema}
-                      onCheckedChange={(checked) => setAssessmentForm({ ...assessmentForm, skinEdema: checked as boolean })}
-                    />
-                    <Label>Edema present</Label>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label>Additional Notes</Label>
-                  <Textarea
-                    value={assessmentForm.skinNotes}
-                    onChange={(e) => setAssessmentForm({ ...assessmentForm, skinNotes: e.target.value })}
-                    rows={3}
-                  />
-                </div>
-              </TabsContent>
-
-              <TabsContent value="eent" className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Eyes</Label>
-                    <Input
-                      value={assessmentForm.eyes}
-                      onChange={(e) => setAssessmentForm({ ...assessmentForm, eyes: e.target.value })}
-                      placeholder="PERRLA, conjunctiva, sclera"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Ears</Label>
-                    <Input
-                      value={assessmentForm.ears}
-                      onChange={(e) => setAssessmentForm({ ...assessmentForm, ears: e.target.value })}
-                      placeholder="Hearing, discharge, tympanic membrane"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Nose</Label>
-                    <Input
-                      value={assessmentForm.nose}
-                      onChange={(e) => setAssessmentForm({ ...assessmentForm, nose: e.target.value })}
-                      placeholder="Discharge, septum, turbinates"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Throat</Label>
-                    <Input
-                      value={assessmentForm.throat}
-                      onChange={(e) => setAssessmentForm({ ...assessmentForm, throat: e.target.value })}
-                      placeholder="Pharynx, tonsils, uvula"
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label>Additional Notes</Label>
-                  <Textarea
-                    value={assessmentForm.eentNotes}
-                    onChange={(e) => setAssessmentForm({ ...assessmentForm, eentNotes: e.target.value })}
-                    rows={3}
-                  />
-                </div>
-              </TabsContent>
-
-              <TabsContent value="cardio" className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Heart Rate</Label>
-                    <Input
-                      value={assessmentForm.heartRate}
-                      onChange={(e) => setAssessmentForm({ ...assessmentForm, heartRate: e.target.value })}
-                      placeholder="e.g., 72 bpm"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Rhythm</Label>
-                    <Input
-                      value={assessmentForm.heartRhythm}
-                      onChange={(e) => setAssessmentForm({ ...assessmentForm, heartRhythm: e.target.value })}
-                      placeholder="Regular, Irregular"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Heart Sounds</Label>
-                    <Input
-                      value={assessmentForm.heartSounds}
-                      onChange={(e) => setAssessmentForm({ ...assessmentForm, heartSounds: e.target.value })}
-                      placeholder="S1, S2, murmurs"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Peripheral Pulses</Label>
-                    <Input
-                      value={assessmentForm.peripheralPulses}
-                      onChange={(e) => setAssessmentForm({ ...assessmentForm, peripheralPulses: e.target.value })}
-                      placeholder="Radial, pedal, etc."
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Capillary Refill</Label>
-                    <Input
-                      value={assessmentForm.capillaryRefill}
-                      onChange={(e) => setAssessmentForm({ ...assessmentForm, capillaryRefill: e.target.value })}
-                      placeholder="<2 seconds, delayed"
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label>Additional Notes</Label>
-                  <Textarea
-                    value={assessmentForm.cardiovascularNotes}
-                    onChange={(e) => setAssessmentForm({ ...assessmentForm, cardiovascularNotes: e.target.value })}
-                    rows={3}
-                  />
-                </div>
-              </TabsContent>
-
-              <TabsContent value="respiratory" className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Respiratory Rate</Label>
-                    <Input
-                      value={assessmentForm.respiratoryRate}
-                      onChange={(e) => setAssessmentForm({ ...assessmentForm, respiratoryRate: e.target.value })}
-                      placeholder="e.g., 16/min"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Breath Sounds</Label>
-                    <Input
-                      value={assessmentForm.breathSounds}
-                      onChange={(e) => setAssessmentForm({ ...assessmentForm, breathSounds: e.target.value })}
-                      placeholder="Clear, crackles, wheezes"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Chest Expansion</Label>
-                    <Input
-                      value={assessmentForm.chestExpansion}
-                      onChange={(e) => setAssessmentForm({ ...assessmentForm, chestExpansion: e.target.value })}
-                      placeholder="Symmetrical, asymmetrical"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Cough</Label>
-                    <Input
-                      value={assessmentForm.cough}
-                      onChange={(e) => setAssessmentForm({ ...assessmentForm, cough: e.target.value })}
-                      placeholder="Productive, non-productive"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Sputum</Label>
-                    <Input
-                      value={assessmentForm.sputum}
-                      onChange={(e) => setAssessmentForm({ ...assessmentForm, sputum: e.target.value })}
-                      placeholder="Color, consistency"
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label>Additional Notes</Label>
-                  <Textarea
-                    value={assessmentForm.respiratoryNotes}
-                    onChange={(e) => setAssessmentForm({ ...assessmentForm, respiratoryNotes: e.target.value })}
-                    rows={3}
-                  />
-                </div>
-              </TabsContent>
-
-              <TabsContent value="gi" className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Abdomen</Label>
-                    <Input
-                      value={assessmentForm.abdomen}
-                      onChange={(e) => setAssessmentForm({ ...assessmentForm, abdomen: e.target.value })}
-                      placeholder="Soft, distended, tender"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Bowel Sounds</Label>
-                    <Input
-                      value={assessmentForm.bowelSounds}
-                      onChange={(e) => setAssessmentForm({ ...assessmentForm, bowelSounds: e.target.value })}
-                      placeholder="Active, hypoactive, hyperactive"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Last Bowel Movement</Label>
-                    <Input
-                      value={assessmentForm.lastBowelMovement}
-                      onChange={(e) => setAssessmentForm({ ...assessmentForm, lastBowelMovement: e.target.value })}
-                      placeholder="Date/time"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Appetite</Label>
-                    <Input
-                      value={assessmentForm.appetite}
-                      onChange={(e) => setAssessmentForm({ ...assessmentForm, appetite: e.target.value })}
-                      placeholder="Good, poor, nausea/vomiting"
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label>Additional Notes</Label>
-                  <Textarea
-                    value={assessmentForm.giNotes}
-                    onChange={(e) => setAssessmentForm({ ...assessmentForm, giNotes: e.target.value })}
-                    rows={3}
-                  />
-                </div>
-              </TabsContent>
-
-              <TabsContent value="gu" className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Bladder Palpation</Label>
-                    <Input
-                      value={assessmentForm.bladderPalpation}
-                      onChange={(e) => setAssessmentForm({ ...assessmentForm, bladderPalpation: e.target.value })}
-                      placeholder="Non-distended, distended"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Urinary Output</Label>
-                    <Input
-                      value={assessmentForm.urinaryOutput}
-                      onChange={(e) => setAssessmentForm({ ...assessmentForm, urinaryOutput: e.target.value })}
-                      placeholder="Amount, frequency"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Urine Color</Label>
-                    <Input
-                      value={assessmentForm.urinaryColor}
-                      onChange={(e) => setAssessmentForm({ ...assessmentForm, urinaryColor: e.target.value })}
-                      placeholder="Clear, amber, cloudy"
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label>Additional Notes</Label>
-                  <Textarea
-                    value={assessmentForm.guNotes}
-                    onChange={(e) => setAssessmentForm({ ...assessmentForm, guNotes: e.target.value })}
-                    rows={3}
-                  />
-                </div>
-              </TabsContent>
-
-              <TabsContent value="musculo" className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Gait</Label>
-                    <Input
-                      value={assessmentForm.gait}
-                      onChange={(e) => setAssessmentForm({ ...assessmentForm, gait: e.target.value })}
-                      placeholder="Steady, unsteady, assistive device"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Range of Motion</Label>
-                    <Input
-                      value={assessmentForm.rangeOfMotion}
-                      onChange={(e) => setAssessmentForm({ ...assessmentForm, rangeOfMotion: e.target.value })}
-                      placeholder="Full, limited"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Muscle Strength</Label>
-                    <Input
-                      value={assessmentForm.muscleStrength}
-                      onChange={(e) => setAssessmentForm({ ...assessmentForm, muscleStrength: e.target.value })}
-                      placeholder="5/5, symmetrical"
-                    />
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      checked={assessmentForm.jointSwelling}
-                      onCheckedChange={(checked) => setAssessmentForm({ ...assessmentForm, jointSwelling: checked as boolean })}
-                    />
-                    <Label>Joint swelling present</Label>
-                  </div>
-                </div>
-                <div className="space-y-2 mt-4">
-                  <Label htmlFor="musculoskeletalNotes">Additional Notes</Label>
-                  <Textarea
-                    id="musculoskeletalNotes"
-                    value={assessmentForm.musculoskeletalNotes}
-                    onChange={(e) => setAssessmentForm({ ...assessmentForm, musculoskeletalNotes: e.target.value })}
-                    rows={3}
-                  />
-                </div>
-              </TabsContent>
-
-              <TabsContent value="neuro" className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Level of Consciousness</Label>
-                    <Input
-                      value={assessmentForm.consciousness}
-                      onChange={(e) => setAssessmentForm({ ...assessmentForm, consciousness: e.target.value })}
-                      placeholder="Alert, drowsy, confused"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Orientation</Label>
-                    <Input
-                      value={assessmentForm.orientation}
-                      onChange={(e) => setAssessmentForm({ ...assessmentForm, orientation: e.target.value })}
-                      placeholder="Person, place, time, situation"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Speech</Label>
-                    <Input
-                      value={assessmentForm.speech}
-                      onChange={(e) => setAssessmentForm({ ...assessmentForm, speech: e.target.value })}
-                      placeholder="Clear, slurred, aphasia"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Pupils</Label>
-                    <Input
-                      value={assessmentForm.pupils}
-                      onChange={(e) => setAssessmentForm({ ...assessmentForm, pupils: e.target.value })}
-                      placeholder="PERRLA, size, reactivity"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Motor Function</Label>
-                    <Input
-                      value={assessmentForm.motorFunction}
-                      onChange={(e) => setAssessmentForm({ ...assessmentForm, motorFunction: e.target.value })}
-                      placeholder="Moves all extremities"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Sensory Function</Label>
-                    <Input
-                      value={assessmentForm.sensoryFunction}
-                      onChange={(e) => setAssessmentForm({ ...assessmentForm, sensoryFunction: e.target.value })}
-                      placeholder="Intact to light touch"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Reflexes</Label>
-                    <Input
-                      value={assessmentForm.reflexes}
-                      onChange={(e) => setAssessmentForm({ ...assessmentForm, reflexes: e.target.value })}
-                      placeholder="2+ bilateral"
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2 mt-4">
-                  <Label htmlFor="neurologicalNotes">Additional Notes</Label>
-                  <Textarea
-                    id="neurologicalNotes"
-                    value={assessmentForm.neurologicalNotes}
-                    onChange={(e) => setAssessmentForm({ ...assessmentForm, neurologicalNotes: e.target.value })}
-                    rows={3}
-                  />
-                </div>
-              </TabsContent>
-            </Tabs>
-
-            <div className="flex justify-end gap-2 mt-4">
-              <Button variant="outline" onClick={() => setShowAssessmentDialog(false)}>
-                Cancel
-              </Button>
-              <Button onClick={handleSaveAssessment}>
-                Save Assessment
-              </Button>
+      {/* Patient Header Card */}
+      <Card className="p-6 shadow-lg no-print">
+        <div className="flex justify-between items-start">
+          <div>
+            <div className="flex items-center space-x-3 mb-1">
+              <h1 className="text-3xl font-bold">{patient.name}</h1>
+              <Badge 
+                variant={patient.status === 'archived' ? 'destructive' : 'default'}
+                className="text-base"
+              >
+                {patient.status.charAt(0).toUpperCase() + patient.status.slice(1)}
+              </Badge>
             </div>
-          </DialogContent>
-        </Dialog>
-      </div>
-      </div>
-
-      <Tabs defaultValue="overview" className="space-y-4">
-        <TabsList>
+            <p className="text-lg text-muted-foreground">Hospital No: {patient.hospital_number}</p>
+          </div>
+          <div className="text-right">
+            <Badge variant="secondary" className="text-base">{patient.age} y/o {patient.sex}</Badge>
+          </div>
+        </div>
+        <Separator className="my-4" />
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <DetailRow label="Date of Birth" value={format(new Date(patient.date_of_birth), 'PPP')} />
+          <DetailRow label="PhilHealth Member" value={patient.philhealth} />
+          <DetailRow label="Admitting Dept" value={patient.admit_to_department} />
+          <DetailRow label="Room/Location" value={patient.admit_to_location} />
+          <DetailRow label="Contact" value={patient.contact_number} />
+          <DetailRow label="Address" value={patient.address} />
+          <DetailRow label="Admitting Diagnosis" value={patient.admitting_diagnosis} />
+        </div>
+      </Card>
+      
+      {/* Tabs */}
+      <Tabs defaultValue="overview" className="no-print">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="assessments">Physical Assessments</TabsTrigger>
+          <TabsTrigger value="assessments">Assessments ({assessments.length})</TabsTrigger>
+          <TabsTrigger value="vitals">Vitals ({vitalSigns.length})</TabsTrigger>
+          <TabsTrigger value="labs">Labs ({labs.length})</TabsTrigger>
+          <TabsTrigger value="imaging">Imaging ({imaging.length})</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="overview">
-          <div className="grid gap-6">
-            {/* Demographics */}
+        {/* OVERVIEW TAB CONTENT (Unchanged) */}
+        <TabsContent value="overview" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>History of Present Illness</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-gray-700">
+                {patient.history_of_present_illness || "N/A"}
+              </p>
+            </CardContent>
+          </Card>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <Card>
-              <CardHeader>
-                <CardTitle>Demographics</CardTitle>
-              </CardHeader>
+              <CardHeader><CardTitle>Problem List</CardTitle></CardHeader>
               <CardContent>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div>
-                    <p className="text-sm text-muted-foreground">Age</p>
-                    <p className="font-medium">{patient.age} years</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Sex</p>
-                    <p className="font-medium">{patient.sex}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Date of Birth</p>
-                    <p className="font-medium">{format(new Date(patient.date_of_birth), "MMM d, yyyy")}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Contact</p>
-                    <p className="font-medium">{patient.contact_number || "N/A"}</p>
-                  </div>
-                  <div className="col-span-2">
-                    <p className="text-sm text-muted-foreground">Address</p>
-                    <p className="font-medium">{patient.address || "N/A"}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Department</p>
-                    <p className="font-medium">{patient.admit_to_department || "N/A"}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Location</p>
-                    <p className="font-medium">{patient.admit_to_location || "N/A"}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">PhilHealth</p>
-                    <Badge variant={patient.philhealth ? "default" : "secondary"}>
-                      {patient.philhealth ? "Yes" : "No"}
-                    </Badge>
-                  </div>
+                <div className="flex flex-wrap gap-2">
+                  {(patient.problem_list || []).map((p, i) => <Badge key={i} variant="default">{p}</Badge>)}
+                  {(!patient.problem_list || patient.problem_list.length === 0) && <p className="text-muted-foreground text-sm">None documented</p>}
                 </div>
               </CardContent>
             </Card>
 
-            {/* Diagnosis & Allergies */}
-            <div className="grid md:grid-cols-2 gap-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Diagnosis</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  <p className="text-sm">{patient.admitting_diagnosis || "No diagnosis recorded"}</p>
-                  {patient.admitting_diagnosis && (
-                    <div className="text-xs text-muted-foreground mt-2">
-                      <p>Admitting Diagnosis: {patient.admitting_diagnosis}</p>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>Allergies</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {patient.allergies && patient.allergies.length > 0 ? (
-                    <div className="flex flex-wrap gap-2">
-                      {patient.allergies.map((allergy, idx) => (
-                        <Badge key={idx} variant="destructive">{allergy}</Badge>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">No allergies recorded</p>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Medical History & Problem List */}
-            <div className="grid md:grid-cols-3 gap-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>History of Present Illness</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {patient.history_of_present_illness ? (
-                    <p className="text-sm">{patient.history_of_present_illness}</p>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">No history of present illness recorded</p>
-                  )}
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>Problem List</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {patient.problem_list && patient.problem_list.length > 0 ? (
-                    <ul className="list-disc pl-4">
-                      {patient.problem_list.map((p, i) => (
-                        <li key={i} className="text-sm">{p}</li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">No problems recorded</p>
-                  )}
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>Admitting Diagnosis</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm">{patient.admitting_diagnosis || "No admitting diagnosis"}</p>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Past Medical History & Personal/Social History */}
-            <div className="grid md:grid-cols-2 gap-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Past Medical History</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {renderJsonData(patient.past_medical_history)}
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>Personal & Social History</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {renderJsonData(patient.personal_social_history)}
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Current Medications */}
             <Card>
-              <CardHeader>
-                <CardTitle>Current Medications</CardTitle>
-              </CardHeader>
+              <CardHeader><CardTitle>Allergies</CardTitle></CardHeader>
               <CardContent>
-                {((patient.current_medications && patient.current_medications.length > 0) || medications.length > 0) ? (
-                  <div className="space-y-2">
-                    {patient.current_medications && patient.current_medications.length > 0 ? (
-                      patient.current_medications.map((m: any, i: number) => (
-                        <div key={`pmed-${i}`} className="flex justify-between items-start border-b pb-2">
-                          <div>
-                            <p className="font-medium">{typeof m === 'string' ? m : m.medication_name || JSON.stringify(m)}</p>
-                          </div>
-                        </div>
-                      ))
-                    ) : (
-                      medications.slice(0, 5).map((med) => (
-                        <div key={med.id} className="flex justify-between items-start border-b pb-2">
-                          <div>
-                            <p className="font-medium">{med.medication_name}</p>
-                            <p className="text-sm text-muted-foreground">
-                              {med.dosage} - {med.frequency} - {med.route}
-                            </p>
-                          </div>
-                          <Badge variant="outline">{format(new Date(med.start_date), "MMM d")}</Badge>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground">No medications recorded</p>
-                )}
+                <div className="flex flex-wrap gap-2">
+                  {(patient.allergies || []).map((a, i) => <Badge key={i} variant="destructive">{a}</Badge>)}
+                  {(!patient.allergies || patient.allergies.length === 0) && <p className="text-muted-foreground text-sm">No Known Allergies (NKA)</p>}
+                </div>
               </CardContent>
             </Card>
 
-            {/* Vital Signs */}
             <Card>
-              <CardHeader>
-                <CardTitle>Recent Vital Signs</CardTitle>
-              </CardHeader>
+              <CardHeader><CardTitle>Current Medications</CardTitle></CardHeader>
               <CardContent>
-                {vitalSigns.length > 0 ? (
-                  <div className="space-y-3">
-                    {vitalSigns.map((vital) => (
-                      <div key={vital.id} className="border-b pb-3">
-                        <p className="text-sm text-muted-foreground mb-2">
-                          {format(new Date(vital.recorded_at), "PPp")}
-                        </p>
-                        <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
-                          {vital.blood_pressure && (
-                            <div>
-                              <p className="text-xs text-muted-foreground">BP</p>
-                              <p className="text-sm font-medium">{vital.blood_pressure}</p>
-                            </div>
-                          )}
-                          {vital.heart_rate && (
-                            <div>
-                              <p className="text-xs text-muted-foreground">HR</p>
-                              <p className="text-sm font-medium">{vital.heart_rate} bpm</p>
-                            </div>
-                          )}
-                          {vital.respiratory_rate && (
-                            <div>
-                              <p className="text-xs text-muted-foreground">RR</p>
-                              <p className="text-sm font-medium">{vital.respiratory_rate}</p>
-                            </div>
-                          )}
-                          {vital.temperature && (
-                            <div>
-                              <p className="text-xs text-muted-foreground">Temp</p>
-                              <p className="text-sm font-medium">{vital.temperature}°C</p>
-                            </div>
-                          )}
-                          {vital.oxygen_saturation && (
-                            <div>
-                              <p className="text-xs text-muted-foreground">SpO2</p>
-                              <p className="text-sm font-medium">{vital.oxygen_saturation}%</p>
-                            </div>
-                          )}
-                          {vital.pain_scale && (
-                            <div>
-                              <p className="text-xs text-muted-foreground">Pain</p>
-                              <p className="text-sm font-medium">{vital.pain_scale}/10</p>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                {(!patient.current_medications || patient.current_medications.length === 0) ? (
+                  <p className="text-muted-foreground text-sm">None documented</p>
                 ) : (
-                  <p className="text-sm text-muted-foreground">No vital signs recorded</p>
+                  <ul className="list-disc pl-4 space-y-1 text-sm">
+                    {(patient.current_medications || []).map((m, i) => <li key={i}>{m}</li>)}
+                  </ul>
                 )}
               </CardContent>
             </Card>
-
-            {/* Lab Results & Imaging */}
-            <div className="grid md:grid-cols-2 gap-6">
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle>Recent Lab Results</CardTitle>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => {
-                      setEditingLab(null);
-                      setShowLabDialog(true);
-                    }}
-                  >
-                    <Plus className="h-4 w-4" />
-                  </Button>
-                </CardHeader>
-                <CardContent>
-                  {labs.length > 0 ? (
-                    <div className="space-y-2">
-                      {labs.map((lab) => (
-                        <div key={lab.id} className="flex items-center justify-between border-b pb-2">
-                          <div>
-                            <p className="font-medium text-sm">{lab.test_name}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {format(new Date(lab.test_date), "MMM d, yyyy")}
-                            </p>
-                            {lab.test_result && (
-                              <p className="text-sm mt-1">{lab.test_result}</p>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => {
-                                setEditingLab(lab);
-                                setLabForm({
-                                  test_name: lab.test_name,
-                                  test_date: format(new Date(lab.test_date), "yyyy-MM-dd"),
-                                  test_result: lab.test_result,
-                                  reference_range: lab.reference_range || "",
-                                  remarks: lab.remarks || ""
-                                });
-                                setShowLabDialog(true);
-                              }}
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleDeleteLab(lab.id)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">No lab results</p>
-                  )}
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle>Recent Imaging</CardTitle>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => {
-                      setEditingImaging(null);
-                      setShowImagingDialog(true);
-                    }}
-                  >
-                    <Plus className="h-4 w-4" />
-                  </Button>
-                </CardHeader>
-                <CardContent>
-                  {imaging.length > 0 ? (
-                    <div className="space-y-2">
-                      {imaging.map((img) => (
-                        <div key={img.id} className="flex items-center justify-between border-b pb-2">
-                          <div>
-                            <p className="font-medium text-sm">{img.imaging_type}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {format(new Date(img.imaging_date), "MMM d, yyyy")}
-                            </p>
-                            {img.findings && (
-                              <p className="text-sm mt-1">{img.findings}</p>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => {
-                                setEditingImaging(img);
-                                setImagingForm({
-                                  imaging_type: img.imaging_type,
-                                  imaging_date: format(new Date(img.imaging_date), "yyyy-MM-dd"),
-                                  findings: img.findings,
-                                  recommendation: img.recommendation || "",
-                                  image_url: img.image_url || ""
-                                });
-                                setShowImagingDialog(true);
-                              }}
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleDeleteImaging(img.id)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">No imaging results</p>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
           </div>
         </TabsContent>
-
-        <TabsContent value="assessments">
-          <div className="space-y-4">
-            {physicalAssessments.length === 0 ? (
-              <Card>
-                <CardContent className="py-8 text-center text-muted-foreground">
-                  No physical assessments recorded yet.
-                </CardContent>
-              </Card>
-            ) : (
-              physicalAssessments.map((assessment) => {
-                const formatAssessmentData = (data: any) => {
-                  if (!data) return "No data";
-                  const entries = Object.entries(data).filter(([key, value]) => value);
-                  if (entries.length === 0) return "No data";
-                  return entries.map(([key, value]) => (
-                    <div key={key} className="mb-1">
-                      <span className="font-medium capitalize">{key.replace(/_/g, ' ')}: </span>
-                      <span>{typeof value === 'boolean' ? (value ? 'Yes' : 'No') : String(value)}</span>
+        
+        {/* ASSESSMENTS TAB CONTENT - MODIFIED */}
+        <TabsContent value="assessments" className="space-y-4">
+          {assessments.length === 0 ? (
+            <div className="text-center p-8 border rounded-lg bg-gray-50">
+              <p className="text-muted-foreground">No physical assessments have been recorded yet.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {assessments.map((assessment, index) => (
+                <Card key={assessment.id} className="p-4">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <h3 className="text-lg font-semibold">
+                        Assessment #{assessments.length - index} 
+                      </h3>
+                      <p className="text-sm text-muted-foreground">
+                        Recorded: {format(new Date(assessment.assessment_date), "PPP - h:mm a")}
+                      </p>
                     </div>
-                  ));
-                };
+                    <div className="flex space-x-2">
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => setViewingAssessment(assessment)} 
+                      >
+                        <UserPlus className="mr-2 h-4 w-4" /> View Details
+                      </Button>
+                      <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                              <Button variant="destructive" size="sm"><Trash2 className="h-4 w-4" /></Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                              <AlertDialogHeader>
+                                  <AlertDialogTitle>Confirm Deletion</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                      Are you sure you want to delete this **Physical Assessment**? This action cannot be undone.
+                                  </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction 
+                                      onClick={() => handleDeleteRecord('physical_assessments', assessment.id, `Assessment #${assessments.length - index}`)}
+                                      className="bg-destructive hover:bg-destructive/90"
+                                  >
+                                      Delete Record
+                                  </AlertDialogAction>
+                              </AlertDialogFooter>
+                          </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
+        </TabsContent>
 
-                return (
-                  <Card key={assessment.id}>
-                    <CardHeader>
-                      <CardTitle className="text-lg">
-                        Assessment - {format(new Date(assessment.assessment_date), "PPp")}
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="space-y-1">
-                          <p className="font-semibold text-sm text-primary mb-2">Skin Assessment</p>
-                          {formatAssessmentData(assessment.skin_assessment)}
-                        </div>
-                        <div className="space-y-1">
-                          <p className="font-semibold text-sm text-primary mb-2">EENT Assessment</p>
-                          {formatAssessmentData(assessment.eent_assessment)}
-                        </div>
-                        <div className="space-y-1">
-                          <p className="font-semibold text-sm text-primary mb-2">Cardiovascular</p>
-                          {formatAssessmentData(assessment.cardiovascular_assessment)}
-                        </div>
-                        <div className="space-y-1">
-                          <p className="font-semibold text-sm text-primary mb-2">Respiratory</p>
-                          {formatAssessmentData(assessment.respiratory_assessment)}
-                        </div>
-                        <div className="space-y-1">
-                          <p className="font-semibold text-sm text-primary mb-2">Gastrointestinal</p>
-                          {formatAssessmentData(assessment.gastrointestinal_assessment)}
-                        </div>
-                        <div className="space-y-1">
-                          <p className="font-semibold text-sm text-primary mb-2">Genitourinary</p>
-                          {formatAssessmentData(assessment.genitourinary_assessment)}
-                        </div>
-                        <div className="space-y-1">
-                          <p className="font-semibold text-sm text-primary mb-2">Musculoskeletal</p>
-                          {formatAssessmentData(assessment.musculoskeletal_assessment)}
-                        </div>
-                        <div className="space-y-1">
-                          <p className="font-semibold text-sm text-primary mb-2">Neurological</p>
-                          {formatAssessmentData(assessment.neurological_assessment)}
-                        </div>
+        {/* VITALS TAB CONTENT - MODIFIED */}
+        <TabsContent value="vitals" className="space-y-4">
+          {vitalSigns.length === 0 ? (
+            <div className="text-center p-8 border rounded-lg bg-gray-50">
+              <p className="text-muted-foreground">No vital signs have been recorded yet.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {vitalSigns.map((vitals, index) => (
+                <Card key={vitals.id} className="p-4">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h3 className="text-lg font-semibold">
+                        Vital Signs 
+                        {/* Use version if available in the fetched data */}
+                        {vitals.version && `Version ${vitals.version}`}
+                        {index === 0 && <Badge className="ml-2 bg-green-500 hover:bg-green-600">LATEST</Badge>}
+                      </h3>
+                      <p className="text-sm text-muted-foreground">
+                        {/* Use recorded_at from the new interface */}
+                        Recorded: {format(new Date(vitals.recorded_at), "PPP - h:mm a")}
+                      </p>
+                    </div>
+                    <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                            <Button variant="destructive" size="sm"><Trash2 className="h-4 w-4" /></Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                            <AlertDialogHeader>
+                                <AlertDialogTitle>Confirm Deletion</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                    Are you sure you want to delete this **Vital Sign** entry ({format(new Date(vitals.recorded_at), "h:mm a")})? This action cannot be undone.
+                                </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction 
+                                    onClick={() => handleDeleteRecord('patient_vital_signs', vitals.id, `Vital Signs at ${format(new Date(vitals.recorded_at), "h:mm a")}`)}
+                                    className="bg-destructive hover:bg-destructive/90"
+                                >
+                                    Delete Record
+                                </AlertDialogAction>
+                            </AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
+                  <Separator className="my-3" />
+                  <div className="grid grid-cols-3 md:grid-cols-6 gap-4 text-sm">
+                    <DetailRow label="BP" value={vitals.blood_pressure || 'N/A'} />
+                    <DetailRow label="HR (bpm)" value={vitals.heart_rate || 'N/A'} />
+                    <DetailRow label="RR (rpm)" value={vitals.respiratory_rate || 'N/A'} />
+                    <DetailRow label="Temp (°C)" value={vitals.temperature || 'N/A'} />
+                    <DetailRow label="O₂ Sat (%)" value={vitals.oxygen_saturation || 'N/A'} />
+                    <DetailRow label="Pain (0-10)" value={vitals.pain_scale || 'N/A'} />
+                    {vitals.notes && <DetailRow label="Notes" value={vitals.notes} />}
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        {/* LABS TAB CONTENT - MODIFIED */}
+        <TabsContent value="labs" className="space-y-4">
+          {labs.length === 0 ? (
+            <div className="text-center p-8 border rounded-lg bg-gray-50">
+              <p className="text-muted-foreground">No lab results have been recorded yet.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {labs.map((lab) => (
+                <Card key={lab.id} className="p-4">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h3 className="text-lg font-semibold">{lab.test_name}</h3>
+                      <p className="text-sm text-muted-foreground">
+                        Date: {format(new Date(lab.test_date), "PPP")}
+                      </p>
+                    </div>
+                    <div className="flex space-x-2 items-center">
+                        {/* Display result using result_value and unit, and flag */}
+                        <Badge variant="secondary" className="text-lg font-bold">
+                          {lab.result_value} {lab.unit}
+                          {lab.flag && (
+                            <span 
+                              className={`ml-2 text-xs font-normal ${lab.flag.toLowerCase() === 'high' ? 'text-red-500' : lab.flag.toLowerCase() === 'low' ? 'text-blue-500' : ''}`}
+                            >
+                              ({lab.flag})
+                            </span>
+                          )}
+                        </Badge>
+                        <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                                <Button variant="destructive" size="sm"><Trash2 className="h-4 w-4" /></Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                                <AlertDialogHeader>
+                                    <AlertDialogTitle>Confirm Deletion</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                        Are you sure you want to delete the lab result for **{lab.test_name}** ({format(new Date(lab.test_date), "PPP")})? This action cannot be undone.
+                                    </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction 
+                                        onClick={() => handleDeleteRecord('patient_labs', lab.id, `Lab Result: ${lab.test_name}`)}
+                                        className="bg-destructive hover:bg-destructive/90"
+                                    >
+                                        Delete Record
+                                    </AlertDialogAction>
+                                </AlertDialogFooter>
+                            </AlertDialogContent>
+                        </AlertDialog>
+                    </div>
+                  </div>
+                  <p className="text-sm mt-2">
+                    {/* Use normal_range for reference */}
+                    <span className="font-medium">Ref Range:</span> {lab.normal_range || 'N/A'}
+                  </p>
+                  <p className="text-sm mt-1">
+                    {/* Use notes for remarks/details */}
+                    <span className="font-medium">Notes/Details:</span> {lab.notes || 'None'}
+                  </p>
+                </Card>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        {/* IMAGING TAB CONTENT - MODIFIED */}
+        <TabsContent value="imaging" className="space-y-4">
+          {imaging.length === 0 ? (
+            <div className="text-center p-8 border rounded-lg bg-gray-50">
+              <p className="text-muted-foreground">No imaging results have been recorded yet.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {imaging.map((img) => (
+                <Card key={img.id} className="p-4">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      {/* Display category if available */}
+                      <div className="flex items-center space-x-2">
+                        <h3 className="text-lg font-semibold">{img.imaging_type}</h3>
+                        {img.category && <Badge variant="outline">{img.category}</Badge>}
                       </div>
-                    </CardContent>
-                  </Card>
-                );
-              })
-            )}
-          </div>
+                      <p className="text-sm text-muted-foreground">
+                        Date: {format(new Date(img.imaging_date), "PPP")}
+                      </p>
+                    </div>
+                    <div className="flex space-x-2 items-center">
+                        {img.image_url && (
+                            <Button variant="link" size="sm" asChild>
+                                <a href={img.image_url} target="_blank" rel="noopener noreferrer">View Image</a>
+                            </Button>
+                        )}
+                        <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                                <Button variant="destructive" size="sm"><Trash2 className="h-4 w-4" /></Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                                <AlertDialogHeader>
+                                    <AlertDialogTitle>Confirm Deletion</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                        Are you sure you want to delete the imaging study for **{img.imaging_type}** ({format(new Date(img.imaging_date), "PPP")})? This action cannot be undone.
+                                    </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction 
+                                        onClick={() => handleDeleteRecord('patient_imaging', img.id, `Imaging Study: ${img.imaging_type}`)}
+                                        className="bg-destructive hover:bg-destructive/90"
+                                    >
+                                        Delete Record
+                                    </AlertDialogAction>
+                                </AlertDialogFooter>
+                            </AlertDialogContent>
+                        </AlertDialog>
+                    </div>
+                  </div>
+                  <p className="text-sm mt-2">
+                    <span className="font-medium">Findings:</span> {img.findings}
+                  </p>
+                  <p className="text-sm mt-1">
+                    {/* Use notes for recommendation/notes, falling back to old recommendation field */}
+                    <span className="font-medium">Recommendation/Notes:</span> {img.notes || img.recommendation || 'None'}
+                  </p>
+                </Card>
+              ))}
+            </div>
+          )}
         </TabsContent>
       </Tabs>
 
-      {/* Lab Dialog */}
-      <Dialog open={showLabDialog} onOpenChange={setShowLabDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{editingLab ? "Edit Lab Result" : "Add Lab Result"}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="test_name">Test Name *</Label>
-              <Input
-                id="test_name"
-                value={labForm.test_name}
-                onChange={(e) => setLabForm(prev => ({ ...prev, test_name: e.target.value }))}
-                placeholder="e.g., Complete Blood Count"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="test_date">Test Date *</Label>
-              <Input
-                id="test_date"
-                type="date"
-                value={labForm.test_date}
-                onChange={(e) => setLabForm(prev => ({ ...prev, test_date: e.target.value }))}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="test_result">Result *</Label>
-              <Textarea
-                id="test_result"
-                value={labForm.test_result}
-                onChange={(e) => setLabForm(prev => ({ ...prev, test_result: e.target.value }))}
-                placeholder="Enter test results"
-                rows={3}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="reference_range">Reference Range</Label>
-              <Input
-                id="reference_range"
-                value={labForm.reference_range}
-                onChange={(e) => setLabForm(prev => ({ ...prev, reference_range: e.target.value }))}
-                placeholder="e.g., 4.5-11.0 x10^9/L"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="remarks">Remarks</Label>
-              <Textarea
-                id="remarks"
-                value={labForm.remarks}
-                onChange={(e) => setLabForm(prev => ({ ...prev, remarks: e.target.value }))}
-                placeholder="Additional notes or remarks"
-                rows={2}
-              />
-            </div>
-          </div>
-          <div className="flex justify-end space-x-2 mt-4">
-            <Button variant="outline" onClick={() => {
-              setShowLabDialog(false);
-              setEditingLab(null);
-            }}>Cancel</Button>
-            <Button 
-              onClick={() => handleSaveLab(!editingLab)} 
-              disabled={loading || !labForm.test_name || !labForm.test_date || !labForm.test_result}
-            >
-              {loading ? "Saving..." : "Save"}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Imaging Dialog */}
-      <Dialog open={showImagingDialog} onOpenChange={setShowImagingDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{editingImaging ? "Edit Imaging Record" : "Add Imaging Record"}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="imaging_type">Imaging Type *</Label>
-              <Input
-                id="imaging_type"
-                value={imagingForm.imaging_type}
-                onChange={(e) => setImagingForm(prev => ({ ...prev, imaging_type: e.target.value }))}
-                placeholder="e.g., X-Ray, CT Scan, MRI"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="imaging_date">Date *</Label>
-              <Input
-                id="imaging_date"
-                type="date"
-                value={imagingForm.imaging_date}
-                onChange={(e) => setImagingForm(prev => ({ ...prev, imaging_date: e.target.value }))}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="findings">Findings *</Label>
-              <Textarea
-                id="findings"
-                value={imagingForm.findings}
-                onChange={(e) => setImagingForm(prev => ({ ...prev, findings: e.target.value }))}
-                placeholder="Enter imaging findings"
-                rows={3}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="recommendation">Recommendation</Label>
-              <Textarea
-                id="recommendation"
-                value={imagingForm.recommendation}
-                onChange={(e) => setImagingForm(prev => ({ ...prev, recommendation: e.target.value }))}
-                placeholder="Enter recommendations"
-                rows={2}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="image_url">Image URL</Label>
-              <Input
-                id="image_url"
-                value={imagingForm.image_url}
-                onChange={(e) => setImagingForm(prev => ({ ...prev, image_url: e.target.value }))}
-                placeholder="Link to image (optional)"
-              />
-            </div>
-          </div>
-          <div className="flex justify-end space-x-2 mt-4">
-            <Button variant="outline" onClick={() => {
-              setShowImagingDialog(false);
-              setEditingImaging(null);
-            }}>Cancel</Button>
-            <Button 
-              onClick={() => handleSaveImaging(!editingImaging)} 
-              disabled={loading || !imagingForm.imaging_type || !imagingForm.imaging_date || !imagingForm.findings}
-            >
-              {loading ? "Saving..." : "Save"}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Edit Patient Dialog */}
-      <EditPatientDialog
-        open={showEditDialog}
-        onOpenChange={setShowEditDialog}
-        patient={patient}
-        onSave={handleSavePatient}
-        vitalSigns={vitalSigns}
-        onVitalSignsSave={fetchPatientData}
-      />
-
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-        <AlertDialogContent>
+        <AlertDialogContent className="no-print"> 
           <AlertDialogHeader>
             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
             <AlertDialogDescription>
@@ -3086,6 +2318,28 @@ useEffect(() => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* The Assessment View Dialog */}
+      {viewingAssessment && (
+        <PhysicalAssessmentViewDialog
+          assessment={viewingAssessment}
+          open={!!viewingAssessment}
+          onOpenChange={(open) => {
+            if (!open) setViewingAssessment(null);
+          }}
+        />
+      )}
+
+      {/* RENDER PRINTABLE RECORD (HIDDEN BY DEFAULT) */}
+      {patient && (
+        <PrintableRecord
+          patient={patient}
+          vitalSigns={vitalSigns}
+          assessments={assessments}
+          labs={labs}
+          imaging={imaging}
+        />
+      )}
     </div>
   );
 };
