@@ -470,7 +470,7 @@ export type Database = {
           discharge_diagnosis: string | null
           family_history: Json | null
           height: number | null
-          history_of_present_illness: string | null
+          history_present_illness: string | null
           hospital_number: string
           id: string
           name: string
@@ -511,7 +511,7 @@ export type Database = {
           discharge_diagnosis?: string | null
           family_history?: Json | null
           height?: number | null
-          history_of_present_illness?: string | null
+          history_present_illness?: string | null
           hospital_number: string
           id?: string
           name: string
@@ -552,7 +552,7 @@ export type Database = {
           discharge_diagnosis?: string | null
           family_history?: Json | null
           height?: number | null
-          history_of_present_illness?: string | null
+          history_present_illness?: string | null
           hospital_number?: string
           id?: string
           name?: string
@@ -762,10 +762,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      get_patient_number: {
-        Args: { user_uuid: string }
-        Returns: string
-      }
+      get_patient_number: { Args: { user_uuid: string }; Returns: string }
       get_user_role: {
         Args: { user_uuid: string }
         Returns: Database["public"]["Enums"]["user_role"]
