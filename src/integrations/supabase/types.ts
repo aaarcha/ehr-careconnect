@@ -91,6 +91,209 @@ export type Database = {
         }
         Relationships: []
       }
+      fdar_notes: {
+        Row: {
+          action: string | null
+          created_at: string
+          data: string | null
+          date_time: string
+          focus: string
+          id: string
+          notes: string | null
+          nurse_name: string | null
+          patient_id: string
+          response: string | null
+          updated_at: string
+        }
+        Insert: {
+          action?: string | null
+          created_at?: string
+          data?: string | null
+          date_time?: string
+          focus: string
+          id?: string
+          notes?: string | null
+          nurse_name?: string | null
+          patient_id: string
+          response?: string | null
+          updated_at?: string
+        }
+        Update: {
+          action?: string | null
+          created_at?: string
+          data?: string | null
+          date_time?: string
+          focus?: string
+          id?: string
+          notes?: string | null
+          nurse_name?: string | null
+          patient_id?: string
+          response?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fdar_notes_patient_id_fkey"
+            columns: ["patient_id"]
+            isOneToOne: false
+            referencedRelation: "patients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      intake_output_records: {
+        Row: {
+          amount: number
+          created_at: string
+          id: string
+          notes: string | null
+          patient_id: string
+          record_type: string
+          recorded_by: string | null
+          time: string
+          type_description: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          id?: string
+          notes?: string | null
+          patient_id: string
+          record_type: string
+          recorded_by?: string | null
+          time?: string
+          type_description: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          id?: string
+          notes?: string | null
+          patient_id?: string
+          record_type?: string
+          recorded_by?: string | null
+          time?: string
+          type_description?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "intake_output_records_patient_id_fkey"
+            columns: ["patient_id"]
+            isOneToOne: false
+            referencedRelation: "patients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      iv_fluid_monitoring: {
+        Row: {
+          bottle_no: number | null
+          created_at: string
+          date: string
+          expected_time_to_consume: string | null
+          id: string
+          iv_solution: string
+          patient_id: string
+          remarks: string | null
+          room_no: string | null
+          running_time: string | null
+          time_started: string | null
+          updated_at: string
+        }
+        Insert: {
+          bottle_no?: number | null
+          created_at?: string
+          date?: string
+          expected_time_to_consume?: string | null
+          id?: string
+          iv_solution: string
+          patient_id: string
+          remarks?: string | null
+          room_no?: string | null
+          running_time?: string | null
+          time_started?: string | null
+          updated_at?: string
+        }
+        Update: {
+          bottle_no?: number | null
+          created_at?: string
+          date?: string
+          expected_time_to_consume?: string | null
+          id?: string
+          iv_solution?: string
+          patient_id?: string
+          remarks?: string | null
+          room_no?: string | null
+          running_time?: string | null
+          time_started?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "iv_fluid_monitoring_patient_id_fkey"
+            columns: ["patient_id"]
+            isOneToOne: false
+            referencedRelation: "patients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      medication_administration_records: {
+        Row: {
+          administered_times: Json | null
+          created_at: string
+          date: string
+          dose: string
+          id: string
+          is_completed: boolean | null
+          medication_name: string
+          nurse_initials: string | null
+          patient_id: string
+          room_no: string | null
+          route: string
+          scheduled_times: Json | null
+          updated_at: string
+        }
+        Insert: {
+          administered_times?: Json | null
+          created_at?: string
+          date?: string
+          dose: string
+          id?: string
+          is_completed?: boolean | null
+          medication_name: string
+          nurse_initials?: string | null
+          patient_id: string
+          room_no?: string | null
+          route: string
+          scheduled_times?: Json | null
+          updated_at?: string
+        }
+        Update: {
+          administered_times?: Json | null
+          created_at?: string
+          date?: string
+          dose?: string
+          id?: string
+          is_completed?: boolean | null
+          medication_name?: string
+          nurse_initials?: string | null
+          patient_id?: string
+          room_no?: string | null
+          route?: string
+          scheduled_times?: Json | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "medication_administration_records_patient_id_fkey"
+            columns: ["patient_id"]
+            isOneToOne: false
+            referencedRelation: "patients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       medtechs: {
         Row: {
           account_number: string
@@ -251,6 +454,7 @@ export type Database = {
       patient_imaging: {
         Row: {
           category: string | null
+          file_path: string | null
           findings: string | null
           id: string
           image_url: string | null
@@ -262,6 +466,7 @@ export type Database = {
         }
         Insert: {
           category?: string | null
+          file_path?: string | null
           findings?: string | null
           id?: string
           image_url?: string | null
@@ -273,6 +478,7 @@ export type Database = {
         }
         Update: {
           category?: string | null
+          file_path?: string | null
           findings?: string | null
           id?: string
           image_url?: string | null

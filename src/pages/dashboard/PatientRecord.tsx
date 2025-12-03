@@ -12,6 +12,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { CalendarIcon, ArrowLeft, UserPlus, ArchiveRestore, Archive, Edit, Trash2, Plus, Printer, Stethoscope } from "lucide-react";
+import { FDARNotes } from "@/components/clinical/FDARNotes";
+import { MedicationAdministration } from "@/components/clinical/MedicationAdministration";
+import { IntakeOutputRecord } from "@/components/clinical/IntakeOutputRecord";
+import { IVFluidMonitoring } from "@/components/clinical/IVFluidMonitoring";
 import { format, differenceInYears } from "date-fns";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -1703,12 +1707,16 @@ const PatientRecord = () => {
       
       {/* Tabs */}
       <Tabs defaultValue="overview" className="no-print">
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-9">
           <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="assessments">Assessments ({assessments.length})</TabsTrigger>
-          <TabsTrigger value="vitals">Vitals ({vitalSigns.length})</TabsTrigger>
-          <TabsTrigger value="labs">Labs ({labs.length})</TabsTrigger>
-          <TabsTrigger value="imaging">Imaging ({imaging.length})</TabsTrigger>
+          <TabsTrigger value="clinical">Clinical Notes</TabsTrigger>
+          <TabsTrigger value="mar">MAR</TabsTrigger>
+          <TabsTrigger value="io">I&O</TabsTrigger>
+          <TabsTrigger value="iv">IV Fluids</TabsTrigger>
+          <TabsTrigger value="assessments">Assessments</TabsTrigger>
+          <TabsTrigger value="vitals">Vitals</TabsTrigger>
+          <TabsTrigger value="labs">Labs</TabsTrigger>
+          <TabsTrigger value="imaging">Imaging</TabsTrigger>
         </TabsList>
 
         {/* OVERVIEW TAB CONTENT */}
@@ -1768,6 +1776,37 @@ const PatientRecord = () => {
               </CardContent>
             </Card>
           </div>
+        </TabsContent>
+
+        {/* CLINICAL NOTES (FDAR) TAB */}
+        <TabsContent value="clinical">
+          <FDARNotes patientId={patient.id} onUpdate={() => fetchData(id!, doctors)} />
+        </TabsContent>
+
+        {/* MAR TAB */}
+        <TabsContent value="mar">
+          <MedicationAdministration 
+            patientId={patient.id} 
+            patientName={patient.name}
+            patientDOB={patient.date_of_birth}
+            roomNo={patient.admit_to_location}
+            onUpdate={() => fetchData(id!, doctors)}
+          />
+        </TabsContent>
+
+        {/* I&O TAB */}
+        <TabsContent value="io">
+          <IntakeOutputRecord patientId={patient.id} onUpdate={() => fetchData(id!, doctors)} />
+        </TabsContent>
+
+        {/* IV FLUIDS TAB */}
+        <TabsContent value="iv">
+          <IVFluidMonitoring 
+            patientId={patient.id}
+            patientName={patient.name}
+            roomNo={patient.admit_to_location}
+            onUpdate={() => fetchData(id!, doctors)}
+          />
         </TabsContent>
         
         {/* ASSESSMENTS TAB CONTENT */}

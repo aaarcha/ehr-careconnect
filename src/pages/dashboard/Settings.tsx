@@ -7,36 +7,12 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Settings as SettingsIcon, User, Bell, Shield, Database, KeyRound, Moon, Sun, Laptop } from "lucide-react";
-import { PasswordManagement } from "@/components/PasswordManagement";
-import { ChangePassword } from "@/components/ChangePassword";
+import { Settings as SettingsIcon, User, Bell, Database, Moon, Sun, Laptop } from "lucide-react";
 import { useTheme } from "next-themes";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 
 const Settings = () => {
-  const [userRole, setUserRole] = useState<string | null>(null);
   const { theme, setTheme } = useTheme();
-
-  useEffect(() => {
-    fetchUserRole();
-  }, []);
-
-  const fetchUserRole = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const { data } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", user.id)
-        .single();
-
-      setUserRole(data?.role || null);
-    } catch (error) {
-      console.error("Error fetching role:", error);
-    }
-  };
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -45,18 +21,14 @@ const Settings = () => {
           <SettingsIcon className="h-8 w-8" />
           Settings
         </h1>
-        <p className="text-muted-foreground">Manage your account and system preferences</p>
+        <p className="text-muted-foreground">Manage system preferences</p>
       </div>
 
       <Tabs defaultValue="profile" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="profile">Profile</TabsTrigger>
           <TabsTrigger value="notifications">Notifications</TabsTrigger>
-          <TabsTrigger value="security">Security</TabsTrigger>
           <TabsTrigger value="system">System</TabsTrigger>
-          {userRole === "staff" && (
-            <TabsTrigger value="passwords">Passwords</TabsTrigger>
-          )}
         </TabsList>
 
         <TabsContent value="profile">
@@ -126,10 +98,6 @@ const Settings = () => {
           </Card>
         </TabsContent>
 
-        <TabsContent value="security">
-          <ChangePassword />
-        </TabsContent>
-
         <TabsContent value="system">
           <Card>
             <CardHeader>
@@ -186,12 +154,6 @@ const Settings = () => {
             </CardContent>
           </Card>
         </TabsContent>
-
-        {userRole === "staff" && (
-          <TabsContent value="passwords">
-            <PasswordManagement />
-          </TabsContent>
-        )}
       </Tabs>
     </div>
   );
