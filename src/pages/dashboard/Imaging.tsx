@@ -68,8 +68,9 @@ const Imaging = () => {
     imaging_type: "",
     findings: "",
     notes: "",
-    image_url: "",
   });
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
 
   const [radtechForm, setRadtechForm] = useState({
     name: "",
@@ -146,25 +147,46 @@ const Imaging = () => {
       return;
     }
 
-    const imagingData = {
-      patient_id: formData.patient_id,
-      category: formData.category,
-      imaging_type: formData.imaging_type,
-      findings: formData.findings,
-      notes: formData.notes,
-      image_url: formData.image_url,
-    };
+    setUploading(true);
+    let image_url = "";
 
     try {
-      imagingSchema.parse(imagingData);
-    } catch (validationError) {
-      if (validationError instanceof z.ZodError) {
-        toast.error(validationError.errors[0].message);
-        return;
+      // Upload file if selected
+      if (imageFile) {
+        const fileExt = imageFile.name.split('.').pop();
+        const fileName = `${formData.patient_id}/${Date.now()}.${fileExt}`;
+        
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('imaging-files')
+          .upload(fileName, imageFile);
+
+        if (uploadError) throw uploadError;
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('imaging-files')
+          .getPublicUrl(fileName);
+        
+        image_url = publicUrl;
       }
-    }
 
-    try {
+      const imagingData = {
+        patient_id: formData.patient_id,
+        category: formData.category,
+        imaging_type: formData.imaging_type,
+        findings: formData.findings,
+        notes: formData.notes,
+        image_url,
+      };
+
+      try {
+        imagingSchema.parse(imagingData);
+      } catch (validationError) {
+        if (validationError instanceof z.ZodError) {
+          toast.error(validationError.errors[0].message);
+          return;
+        }
+      }
+
       const { error } = await supabase.from("patient_imaging").insert([imagingData]);
       
       if (error) throw error;
@@ -176,11 +198,13 @@ const Imaging = () => {
         imaging_type: "",
         findings: "",
         notes: "",
-        image_url: "",
       });
+      setImageFile(null);
       fetchImagingResults();
     } catch (error: any) {
-      toast.error("Failed to add imaging result. Please check your data.");
+      toast.error("Failed to add imaging result: " + error.message);
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -319,12 +343,15 @@ const Imaging = () => {
                   </div>
                   
                   <div className="space-y-2 col-span-2">
-                    <Label>Image URL (Optional)</Label>
+                    <Label>Upload Image (Optional)</Label>
                     <Input
-                      value={formData.image_url}
-                      onChange={(e) => setFormData({ ...formData, image_url: e.target.value })}
-                      placeholder="https://..."
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => setImageFile(e.target.files?.[0] || null)}
                     />
+                    {imageFile && (
+                      <p className="text-sm text-muted-foreground">Selected: {imageFile.name}</p>
+                    )}
                   </div>
                   
                   <div className="space-y-2 col-span-2">
@@ -341,8 +368,8 @@ const Imaging = () => {
                   <Button type="button" variant="outline" onClick={() => setShowDialog(false)} className="flex-1">
                     Cancel
                   </Button>
-                  <Button type="submit" className="flex-1">
-                    Add Result
+                  <Button type="submit" className="flex-1" disabled={uploading}>
+                    {uploading ? "Uploading..." : "Add Result"}
                   </Button>
                 </div>
               </form>

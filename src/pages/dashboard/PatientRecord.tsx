@@ -415,7 +415,8 @@ const EditPatientDialog = ({
   doctors, 
   onSave,
   vitalSigns,
-  onVitalSignsSave 
+  onVitalSignsSave,
+  onAssessmentSave 
 }: { 
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -424,6 +425,7 @@ const EditPatientDialog = ({
   onSave: (data: EditPatientForm) => Promise<void>;
   vitalSigns: VitalSign[];
   onVitalSignsSave: () => Promise<void>;
+  onAssessmentSave: () => Promise<void>;
 }) => {
   const [loading, setLoading] = useState(false);
   
@@ -493,6 +495,7 @@ const EditPatientDialog = ({
       if (error) throw error;
 
       toast.success('Physical assessment saved successfully');
+      onAssessmentSave();
       
       // Clear the form
       setAssessmentForm({
@@ -649,7 +652,6 @@ const EditPatientDialog = ({
         oxygen_saturation: formData.vital_signs?.oxygen_saturation || null,
         pain_scale: formData.vital_signs?.pain_scale || null,
         notes: formData.vital_signs?.notes || '',
-        version: createNewVersion ? latestVersion + 1 : 1, 
         recorded_at: new Date().toISOString(),
       };
 
@@ -1657,7 +1659,8 @@ const PatientRecord = () => {
                 doctors={doctors}
                 onSave={handlePatientSave}
                 vitalSigns={vitalSigns}
-                onVitalSignsSave={() => fetchData(id!, doctors)} 
+                onVitalSignsSave={() => fetchData(id!, doctors)}
+                onAssessmentSave={() => fetchData(id!, doctors)} 
               />
             )}
           </Dialog>
