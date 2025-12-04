@@ -8,10 +8,102 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Edit, Trash2, Pill } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Plus, Edit, Trash2, Pill, X, Check } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { sanitizeError } from "@/lib/errorHandling";
+
+// Component for time checkbox with inline nurse initials input
+const MARTimeCheckbox = ({
+  time,
+  given,
+  nurse,
+  disabled,
+  onAdminister
+}: {
+  time: string;
+  given: boolean;
+  nurse: string;
+  disabled: boolean;
+  onAdminister: (given: boolean, initials: string) => void;
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [initials, setInitials] = useState(nurse);
+
+  const handleConfirm = () => {
+    if (!initials.trim()) {
+      toast.error("Please enter nurse initials");
+      return;
+    }
+    onAdminister(true, initials);
+    setIsOpen(false);
+  };
+
+  const handleUncheck = () => {
+    onAdminister(false, "");
+  };
+
+  if (given) {
+    return (
+      <div className="flex items-center gap-1 bg-green-100 dark:bg-green-900/30 px-2 py-1 rounded text-sm">
+        <Check className="h-3 w-3 text-green-600" />
+        <span className="font-medium">{time}</span>
+        <span className="text-xs text-muted-foreground">({nurse})</span>
+        {!disabled && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-5 w-5 ml-1"
+            onClick={handleUncheck}
+          >
+            <X className="h-3 w-3" />
+          </Button>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <Popover open={isOpen} onOpenChange={setIsOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={disabled}
+          className="text-xs px-2 py-1 h-auto"
+        >
+          {time}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-64 p-3" align="start">
+        <div className="space-y-3">
+          <div className="text-sm font-medium">Mark as administered at {time}</div>
+          <div className="space-y-2">
+            <Label htmlFor="initials" className="text-xs">Nurse Initials</Label>
+            <Input
+              id="initials"
+              value={initials}
+              onChange={(e) => setInitials(e.target.value)}
+              placeholder="Enter initials"
+              className="h-8"
+              autoFocus
+              onKeyDown={(e) => e.key === 'Enter' && handleConfirm()}
+            />
+          </div>
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" onClick={() => setIsOpen(false)} className="flex-1">
+              Cancel
+            </Button>
+            <Button size="sm" onClick={handleConfirm} className="flex-1">
+              Confirm
+            </Button>
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+};
 
 interface MARRecord {
   id: string;
@@ -264,6 +356,47 @@ export const MedicationAdministration = ({
                   onChange={(e) => setFormData({ ...formData, nurse_initials: e.target.value })}
                 />
               </div>
+              <div className="space-y-2">
+                <Label>Scheduled Times</Label>
+                <div className="flex flex-wrap gap-2">
+                  {formData.scheduled_times.map((time, idx) => (
+                    <div key={idx} className="flex items-center gap-1">
+                      <Input
+                        type="time"
+                        value={time}
+                        onChange={(e) => {
+                          const newTimes = [...formData.scheduled_times];
+                          newTimes[idx] = e.target.value;
+                          setFormData({ ...formData, scheduled_times: newTimes });
+                        }}
+                        className="w-28"
+                      />
+                      {formData.scheduled_times.length > 1 && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => {
+                            const newTimes = formData.scheduled_times.filter((_, i) => i !== idx);
+                            setFormData({ ...formData, scheduled_times: newTimes });
+                          }}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setFormData({ ...formData, scheduled_times: [...formData.scheduled_times, "12:00"] })}
+                  >
+                    <Plus className="h-4 w-4 mr-1" /> Add Time
+                  </Button>
+                </div>
+              </div>
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => { setDialogOpen(false); resetForm(); }}>Cancel</Button>
@@ -291,10 +424,7 @@ export const MedicationAdministration = ({
                 <TableHead>Medication</TableHead>
                 <TableHead>Dose</TableHead>
                 <TableHead>Route</TableHead>
-                <TableHead>08:00</TableHead>
-                <TableHead>12:00</TableHead>
-                <TableHead>18:00</TableHead>
-                <TableHead>22:00</TableHead>
+                <TableHead>Times</TableHead>
                 <TableHead>Nurse</TableHead>
                 <TableHead className="w-[80px]">Actions</TableHead>
               </TableRow>
@@ -305,20 +435,20 @@ export const MedicationAdministration = ({
                   <TableCell className="font-medium">{record.medication_name}</TableCell>
                   <TableCell>{record.dose}</TableCell>
                   <TableCell>{record.route}</TableCell>
-                  {[0, 1, 2, 3].map((idx) => (
-                    <TableCell key={idx}>
-                      <Checkbox
-                        checked={record.administered_times[idx]?.given || false}
-                        disabled={record.is_completed}
-                        onCheckedChange={(checked) => {
-                          const initials = prompt("Enter nurse initials:");
-                          if (initials) {
-                            handleAdminister(record.id, idx, checked as boolean, initials);
-                          }
-                        }}
-                      />
-                    </TableCell>
-                  ))}
+                  <TableCell>
+                    <div className="flex flex-wrap gap-2">
+                      {record.scheduled_times.map((time, idx) => (
+                        <MARTimeCheckbox
+                          key={idx}
+                          time={time}
+                          given={record.administered_times[idx]?.given || false}
+                          nurse={record.administered_times[idx]?.nurse || ""}
+                          disabled={record.is_completed}
+                          onAdminister={(given, initials) => handleAdminister(record.id, idx, given, initials)}
+                        />
+                      ))}
+                    </div>
+                  </TableCell>
                   <TableCell>{record.nurse_initials || "-"}</TableCell>
                   <TableCell>
                     <div className="flex gap-1">
