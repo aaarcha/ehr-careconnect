@@ -28,7 +28,6 @@ const Auth = () => {
     try {
       setLoading(true);
 
-      // Staff login uses the seeded email
       const email = 'staff@careconnect.com';
 
       // Try to sign in first
@@ -37,36 +36,25 @@ const Auth = () => {
         password
       });
 
-      // If user doesn't exist, create the account (for first-time setup)
+      // If login fails, reset/create the staff account via edge function
       if (error?.message?.includes('Invalid login credentials')) {
-        const { error: signUpError, data: signUpData } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            emailRedirectTo: `${window.location.origin}/dashboard`
-          }
+        toast.info('Setting up staff account...');
+        
+        const { data, error: fnError } = await supabase.functions.invoke('reset-staff-password', {
+          body: { email, password }
         });
 
-        if (signUpError) throw signUpError;
+        if (fnError) throw fnError;
+        if (data?.error) throw new Error(data.error);
 
-        // Create user_role entry for staff
-        if (signUpData.user) {
-          await supabase.from('user_roles').upsert({
-            user_id: signUpData.user.id,
-            role: 'staff',
-            account_number: accountNumber
-          }, { onConflict: 'user_id' });
-        }
-
-        toast.success('Account created! Logging in...');
-        
-        // Sign in after signup
-        const { error: loginError } = await supabase.auth.signInWithPassword({
+        // Try login again
+        const { error: retryError } = await supabase.auth.signInWithPassword({
           email,
           password
         });
         
-        if (loginError) throw loginError;
+        if (retryError) throw retryError;
+        toast.success('Staff account ready!');
       } else if (error) {
         throw error;
       }
