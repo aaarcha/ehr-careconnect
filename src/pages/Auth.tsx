@@ -10,8 +10,8 @@ import logoImage from "@/assets/CareConnectLogo.jpg";
 
 const Auth = () => {
   const navigate = useNavigate();
-  const [accountNumber, setAccountNumber] = useState("");
-  const [password, setPassword] = useState("");
+  const [accountNumber, setAccountNumber] = useState("STAFF001");
+  const [password, setPassword] = useState("staff123");
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
