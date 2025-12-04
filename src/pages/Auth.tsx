@@ -28,15 +28,15 @@ const Auth = () => {
     try {
       setLoading(true);
 
-      const email = 'staff@careconnect.com';
+      // Use existing staff account email
+      const email = 'staff001@careconnect.com';
 
-      // Try to sign in first
+      // Try to sign in - if fails, update password via edge function
       let { error } = await supabase.auth.signInWithPassword({
         email,
         password
       });
 
-      // If login fails, reset/create the staff account via edge function
       if (error?.message?.includes('Invalid login credentials')) {
         toast.info('Setting up staff account...');
         
