@@ -31,12 +31,45 @@ const Auth = () => {
       // Staff login uses the seeded email
       const email = 'staff@careconnect.com';
 
-      const { error } = await supabase.auth.signInWithPassword({
+      // Try to sign in first
+      let { error } = await supabase.auth.signInWithPassword({
         email,
         password
       });
 
-      if (error) throw error;
+      // If user doesn't exist, create the account (for first-time setup)
+      if (error?.message?.includes('Invalid login credentials')) {
+        const { error: signUpError, data: signUpData } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            emailRedirectTo: `${window.location.origin}/dashboard`
+          }
+        });
+
+        if (signUpError) throw signUpError;
+
+        // Create user_role entry for staff
+        if (signUpData.user) {
+          await supabase.from('user_roles').upsert({
+            user_id: signUpData.user.id,
+            role: 'staff',
+            account_number: accountNumber
+          }, { onConflict: 'user_id' });
+        }
+
+        toast.success('Account created! Logging in...');
+        
+        // Sign in after signup
+        const { error: loginError } = await supabase.auth.signInWithPassword({
+          email,
+          password
+        });
+        
+        if (loginError) throw loginError;
+      } else if (error) {
+        throw error;
+      }
 
       navigate('/dashboard');
       
