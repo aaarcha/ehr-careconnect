@@ -968,6 +968,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_all_staff_recipients: {
+        Args: never
+        Returns: {
+          display_name: string
+          role: string
+          user_id: string
+        }[]
+      }
       get_patient_number: { Args: { user_uuid: string }; Returns: string }
       get_user_role: {
         Args: { user_uuid: string }

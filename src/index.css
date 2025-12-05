@@ -111,3 +111,47 @@
   50% { background-position: 100% 50%; }
   100% { background-position: 0% 50%; }
 }
+
+/* Print styles for patient records */
+@media print {
+  /* Hide sidebar, header, and navigation */
+  aside,
+  nav,
+  header,
+  .no-print,
+  [data-sidebar],
+  [class*="sidebar"],
+  .fixed {
+    display: none !important;
+  }
+
+  /* Remove margins and padding from layout wrappers */
+  body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: white !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Reset main content area */
+  main,
+  [class*="ml-64"],
+  [class*="p-4"],
+  [class*="p-6"],
+  [class*="p-8"] {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  /* Page breaks */
+  .page-break {
+    page-break-before: always;
+  }
+
+  .break-inside-avoid {
+    break-inside: avoid;
+  }
+}
