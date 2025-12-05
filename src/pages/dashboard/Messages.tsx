@@ -36,11 +36,9 @@ interface StaffRecipient {
 }
 
 const ROLE_OPTIONS = [
-  { value: "doctor", label: "Doctor" },
-  { value: "nurse", label: "Nurse" },
-  { value: "radtech", label: "RadTech" },
+  { value: "staff", label: "Admin/Staff" },
   { value: "medtech", label: "MedTech" },
-  { value: "staff", label: "Admin" },
+  { value: "radtech", label: "RadTech" },
 ];
 
 export default function Messages(): JSX.Element {
@@ -373,12 +371,13 @@ export default function Messages(): JSX.Element {
                   <label className="text-sm font-medium">Recipient</label>
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className="text-sm font-medium">Recipient Type</label>
+                      <label className="text-sm font-medium">Recipient Type (Optional)</label>
                       <Select value={selectedRole} onValueChange={(v) => { setSelectedRole(v); setSelectedRecipient(""); }}>
                         <SelectTrigger>
-                          <SelectValue placeholder="Select type" />
+                          <SelectValue placeholder="Filter by type" />
                         </SelectTrigger>
                         <SelectContent>
+                          <SelectItem value="all">All Users</SelectItem>
                           {ROLE_OPTIONS.map((r) => (
                             <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
                           ))}
@@ -390,13 +389,13 @@ export default function Messages(): JSX.Element {
                       <label className="text-sm font-medium">Recipient</label>
                       <Select value={selectedRecipient} onValueChange={setSelectedRecipient}>
                         <SelectTrigger>
-                          <SelectValue placeholder={selectedRole ? "Select recipient" : "Select type first"} />
+                          <SelectValue placeholder="Select recipient" />
                         </SelectTrigger>
                         <SelectContent>
-                          {users.filter(u => u.user_id !== currentUserId && (!selectedRole || u.role.toLowerCase() === selectedRole.toLowerCase())).length === 0 ? (
-                            <SelectItem value="__no_users__" disabled>No users found for this role</SelectItem>
+                          {users.filter(u => u.user_id !== currentUserId && (!selectedRole || selectedRole === "all" || u.role.toLowerCase() === selectedRole.toLowerCase())).length === 0 ? (
+                            <SelectItem value="__no_users__" disabled>No users found</SelectItem>
                           ) : (
-                            users.filter(u => u.user_id !== currentUserId && (!selectedRole || u.role.toLowerCase() === selectedRole.toLowerCase())).map((user) => (
+                            users.filter(u => u.user_id !== currentUserId && (!selectedRole || selectedRole === "all" || u.role.toLowerCase() === selectedRole.toLowerCase())).map((user) => (
                               <SelectItem key={user.user_id} value={user.user_id}>{user.display} ({ROLE_OPTIONS.find(r => r.value === user.role)?.label || user.role})</SelectItem>
                             ))
                           )}
