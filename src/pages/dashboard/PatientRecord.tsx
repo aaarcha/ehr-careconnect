@@ -9,9 +9,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { CalendarIcon, ArrowLeft, UserPlus, ArchiveRestore, Archive, Edit, Trash2, Plus, Printer, Stethoscope } from "lucide-react";
+import { DatePickerWithInput } from "@/components/ui/date-picker-with-input";
+import { ArrowLeft, UserPlus, ArchiveRestore, Archive, Edit, Trash2, Plus, Printer, Stethoscope } from "lucide-react";
 import { FDARNotes } from "@/components/clinical/FDARNotes";
 import { MedicationAdministration } from "@/components/clinical/MedicationAdministration";
 import { IntakeOutputRecord } from "@/components/clinical/IntakeOutputRecord";
@@ -752,32 +751,16 @@ const EditPatientDialog = ({
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="dateOfBirth">Date of Birth</Label>
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <Button 
-                                variant="outline" 
-                                className={cn("w-full justify-start text-left font-normal", !formData.date_of_birth && "text-muted-foreground")}
-                              >
-                                <CalendarIcon className="mr-2 h-4 w-4" />
-                                {formData.date_of_birth ? format(new Date(formData.date_of_birth), "PPP") : "Pick a date"}
-                              </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0">
-                              <Calendar 
-                                mode="single" 
-                                selected={formData.date_of_birth ? new Date(formData.date_of_birth) : undefined} 
-                                onSelect={(date) => {
-                                  if (date) {
-                                    handleInputChange("date_of_birth", format(date, "yyyy-MM-dd"));
-                                    handleInputChange("age", differenceInYears(new Date(), date));
-                                  }
-                                }} 
-                                captionLayout="dropdown" 
-                                fromYear={1900} 
-                                toYear={new Date().getFullYear()} 
-                              />
-                            </PopoverContent>
-                          </Popover>
+                          <DatePickerWithInput
+                            date={formData.date_of_birth ? new Date(formData.date_of_birth) : undefined}
+                            onDateChange={(date) => {
+                              if (date) {
+                                handleInputChange("date_of_birth", format(date, "yyyy-MM-dd"));
+                                handleInputChange("age", differenceInYears(new Date(), date));
+                              }
+                            }}
+                            placeholder="MM/DD/YYYY"
+                          />
                         </div>
                         <div className="col-span-2 space-y-2">
                           <Label htmlFor="address">Address</Label>
