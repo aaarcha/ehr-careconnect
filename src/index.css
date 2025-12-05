@@ -112,46 +112,102 @@
   100% { background-position: 0% 50%; }
 }
 
-/* Print styles for patient records */
+/* Print Styles - Enhanced for Patient Records */
 @media print {
-  /* Hide sidebar, header, and navigation */
-  aside,
-  nav,
-  header,
-  .no-print,
-  [data-sidebar],
-  [class*="sidebar"],
-  .fixed {
-    display: none !important;
+  /* Hide all UI elements by default */
+  body * {
+    visibility: hidden;
   }
 
-  /* Remove margins and padding from layout wrappers */
+  /* Show only printable content */
+  .print\:block,
+  .print\:block * {
+    visibility: visible;
+  }
+
+  /* Position printable content at top */
+  .print\:block {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+
+  /* Reset body for print */
   body {
+    background: white !important;
     margin: 0 !important;
     padding: 0 !important;
-    background: white !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
 
-  /* Reset main content area */
-  main,
-  [class*="ml-64"],
-  [class*="p-4"],
-  [class*="p-6"],
-  [class*="p-8"] {
-    margin: 0 !important;
-    padding: 0 !important;
-    width: 100% !important;
-    max-width: 100% !important;
+  /* Print page setup - each section gets its own page */
+  .print-page {
+    page-break-after: always;
+    padding: 0.5in;
+    min-height: 100vh;
+    box-sizing: border-box;
+    background: white;
   }
 
-  /* Page breaks */
-  .page-break {
-    page-break-before: always;
+  .print-page:last-child {
+    page-break-after: auto;
   }
 
+  /* Prevent breaks inside elements */
   .break-inside-avoid {
     break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* Table styling for print */
+  table {
+    border-collapse: collapse;
+    width: 100%;
+  }
+
+  th, td {
+    border: 1px solid #333 !important;
+    padding: 4px 8px !important;
+  }
+
+  th {
+    background-color: #f0f0f0 !important;
+    font-weight: bold;
+  }
+
+  /* Header styling for each page */
+  .print-page-header {
+    margin-bottom: 16px;
+  }
+
+  /* Flag colors for lab results */
+  .bg-red-50 {
+    background-color: #fef2f2 !important;
+  }
+  
+  .bg-green-50 {
+    background-color: #f0fdf4 !important;
+  }
+
+  /* Hide screen-only elements */
+  .no-print,
+  nav,
+  aside,
+  header,
+  footer,
+  button,
+  [data-sidebar],
+  [data-radix-popper-content-wrapper],
+  .fixed,
+  [class*="sidebar"] {
+    display: none !important;
+  }
+
+  /* Page margins */
+  @page {
+    margin: 0.5in;
+    size: letter portrait;
   }
 }
