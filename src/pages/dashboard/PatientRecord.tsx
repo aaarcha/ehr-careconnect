@@ -15,6 +15,7 @@ import { FDARNotes } from "@/components/clinical/FDARNotes";
 import { MedicationAdministration } from "@/components/clinical/MedicationAdministration";
 import { IntakeOutputRecord } from "@/components/clinical/IntakeOutputRecord";
 import { IVFluidMonitoring } from "@/components/clinical/IVFluidMonitoring";
+import PrintablePatientReport from "@/components/clinical/PrintablePatientReport";
 import { format, differenceInYears } from "date-fns";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -222,186 +223,6 @@ const HistorySectionDisplay = ({ title, history }: { title: string; history: Pas
     </Card>
   );
 };
-
-// -----------------------------------------------------------------------------
-// PRINTABLE RECORD COMPONENT 
-// -----------------------------------------------------------------------------
-
-const PrintableRecord = ({ 
-  patient, 
-  vitalSigns, 
-  assessments, 
-  labs, 
-  imaging,
-  attendingDoctorName
-}: { 
-  patient: Patient, 
-  vitalSigns: VitalSign[], 
-  assessments: PhysicalAssessment[], 
-  labs: Lab[], 
-  imaging: Imaging[],
-  attendingDoctorName: string | null
-}) => {
-    const DetailRowPrint = ({ label, value }: { label: string; value: string | number | undefined | null | boolean }) => (
-        <div className="flex flex-col text-xs print:text-xs border-r px-2 last:border-r-0">
-            <span className="font-semibold text-gray-700 print:text-gray-900">{label}</span>
-            <span className="break-words font-medium">
-              {value === true ? 'Yes' : value === false ? 'No' : value || 'N/A'}
-            </span>
-        </div>
-    );
-
-    const ArrayPrint = ({ label, items }: { label: string; items: string[] | undefined | null }) => (
-        <div className="text-xs space-y-1">
-            <h4 className="font-bold text-sm">{label}</h4>
-            {(items || []).length > 0 ? (
-                <ul className="list-disc pl-4">
-                    {(items || []).map((item, i) => <li key={i}>{item}</li>)}
-                </ul>
-            ) : <p>None documented</p>}
-        </div>
-    );
-
-    const AssessmentDetailsPrint = ({ title, data }: { title: string; data: any }) => (
-      <div className="mb-4 break-inside-avoid">
-        <h3 className="font-semibold text-sm mt-2 border-b-2 pb-1">{title}</h3>
-        <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs mt-1">
-          {Object.entries(data).map(([key, value]) => (
-            <div key={key} className="flex flex-col">
-              <dt className="font-medium capitalize text-muted-foreground">
-                {key.replace(/_/g, ' ').replace(/([A-Z])/g, ' $1').trim()}:
-              </dt>
-              <dd className="break-words font-medium">
-                {typeof value === 'boolean'
-                  ? value ? 'Yes' : 'No'
-                  : (value as ReactNode) || 'N/A'} 
-              </dd>
-            </div>
-          ))}
-        </dl>
-      </div>
-    );
-
-
-    return (
-        <div className="hidden print:block space-y-6 p-4 bg-white min-h-[95vh] text-black">
-            
-            <div className="border-b pb-3 mb-4 flex justify-between items-end">
-                <div>
-                    <h1 className="text-2xl font-bold">{patient.name}</h1>
-                    <p className="text-sm font-medium">Patient Record - Health Weave System</p>
-                </div>
-                <div className="text-right text-sm">
-                    <p>Hosp No: <span className="font-bold">{patient.hospital_number}</span></p>
-                    <p>Attending Physician: <span className="font-bold">{attendingDoctorName || "N/A"}</span></p>
-                    <p>Date Generated: {format(new Date(), 'MMM dd, yyyy h:mm a')}</p>
-                </div>
-            </div>
-
-            <div className="grid grid-cols-6 border-b pb-2">
-                <DetailRowPrint label="DoB" value={format(new Date(patient.date_of_birth), 'PPP')} />
-                <DetailRowPrint label="Age" value={patient.age} />
-                <DetailRowPrint label="Sex" value={patient.sex} />
-                <DetailRowPrint label="Status" value={patient.status.toUpperCase()} />
-                <DetailRowPrint label="PhilHealth" value={patient.philhealth} />
-                <DetailRowPrint label="Dept" value={patient.admit_to_department} />
-            </div>
-
-            <div className="grid grid-cols-2 border-b pb-2">
-                <DetailRowPrint label="Admitting Diagnosis" value={patient.admitting_diagnosis} />
-                <DetailRowPrint label="Address" value={patient.address} />
-            </div>
-
-
-            <h2 className="text-lg font-bold mt-4 border-b-2 pb-1">History & Summary</h2>
-            <div className="grid grid-cols-3 gap-4 text-xs">
-                <div className="col-span-3">
-                    <h3 className="font-bold text-sm">History of Present Illness</h3>
-                    <p className="italic">{patient.history_of_present_illness || "N/A"}</p>
-                </div>
-                <ArrayPrint label="Problem List" items={patient.problem_list} />
-                <ArrayPrint label="Allergies" items={patient.allergies} />
-                <ArrayPrint label="Current Medications" items={patient.current_medications as string[]} />
-            </div>
-
-            <h2 className="text-lg font-bold mt-4 border-b-2 pb-1">Medical Histories</h2>
-            <div className="space-y-3 pt-2 break-inside-avoid">
-                <HistorySectionDisplay title="Past Medical History" history={patient.past_medical_history} />
-                <HistorySectionDisplay title="Personal & Social History" history={patient.personal_social_history} />
-                <HistorySectionDisplay title="Family History" history={patient.family_history} />
-            </div>
-            
-            <h2 className="text-lg font-bold mt-4 border-b-2 pb-1">Vital Signs History</h2>
-            {vitalSigns.length > 0 ? (
-                <div className="space-y-2">
-                    {vitalSigns.map((vitals) => (
-                        <div key={vitals.id} className="border p-2 rounded-md grid grid-cols-7 gap-2 text-xs break-inside-avoid">
-                            <DetailRowPrint label="Time" value={format(new Date(vitals.recorded_at), "h:mm a")} />
-                            <DetailRowPrint label="BP" value={vitals.blood_pressure} />
-                            <DetailRowPrint label="HR" value={vitals.heart_rate} />
-                            <DetailRowPrint label="RR" value={vitals.respiratory_rate} />
-                            <DetailRowPrint label="Temp" value={`${vitals.temperature}°C`} />
-                            <DetailRowPrint label="O₂ Sat" value={`${vitals.oxygen_saturation}%`} />
-                            <DetailRowPrint label="Pain" value={vitals.pain_scale} />
-                            {vitals.notes && <div className="col-span-7 pt-1"><DetailRowPrint label="Notes" value={vitals.notes} /></div>}
-                        </div>
-                    ))}
-                </div>
-            ) : <p className="text-sm">No vital signs recorded.</p>}
-
-            <div className="grid grid-cols-2 gap-4">
-                <div className="break-inside-avoid">
-                    <h2 className="text-lg font-bold mt-4 border-b-2 pb-1">Lab Results ({labs.length})</h2>
-                    {labs.length > 0 ? (
-                        <div className="text-xs space-y-1 pt-1">
-                            {labs.map(lab => (
-                                <div key={lab.id} className="border p-2 rounded-sm">
-                                    <p className="font-bold">{lab.test_name} ({format(new Date(lab.test_date), "MMM dd, yyyy")})</p>
-                                    <p className="text-sm">Result: <span className="font-bold">{lab.result_value} {lab.unit}</span> (Ref: {lab.normal_range})</p>
-                                    {lab.notes && <p className="italic text-gray-600">Notes: {lab.notes}</p>}
-                                </div>
-                            ))}
-                        </div>
-                    ) : <p className="text-sm">No lab results recorded.</p>}
-                </div>
-                
-                <div className="break-inside-avoid">
-                    <h2 className="text-lg font-bold mt-4 border-b-2 pb-1">Imaging Studies ({imaging.length})</h2>
-                    {imaging.length > 0 ? (
-                        <div className="text-xs space-y-1 pt-1">
-                            {imaging.map(img => (
-                                <div key={img.id} className="border p-2 rounded-sm">
-                                    <p className="font-bold">{img.imaging_type} ({format(new Date(img.imaging_date), "MMM dd, yyyy")})</p>
-                                    <p className="text-sm">Findings: {img.findings}</p>
-                                    {img.notes && <p className="italic text-gray-600">Notes: {img.notes}</p>}
-                                </div>
-                            ))}
-                        </div>
-                    ) : <p className="text-sm">No imaging recorded.</p>}
-                </div>
-            </div>
-
-            <h2 className="text-lg font-bold mt-4 border-b-2 pb-1">Physical Assessments ({assessments.length})</h2>
-            <div className="columns-2 space-y-4 pt-2">
-                {assessments.map((assessment) => (
-                    <div key={assessment.id} className="p-3 border rounded-lg break-inside-avoid">
-                        <h3 className="text-base font-bold mb-2">Assessment from {format(new Date(assessment.assessment_date), "MMM dd, yyyy h:mm a")}</h3>
-                        <Separator className="mb-2" />
-                        <AssessmentDetailsPrint title="Skin Assessment" data={assessment.skin_assessment} />
-                        <AssessmentDetailsPrint title="EENT Assessment" data={assessment.eent_assessment} />
-                        <AssessmentDetailsPrint title="Cardiovascular" data={assessment.cardiovascular_assessment} />
-                        <AssessmentDetailsPrint title="Respiratory" data={assessment.respiratory_assessment} />
-                        <AssessmentDetailsPrint title="Gastrointestinal" data={assessment.gastrointestinal_assessment} />
-                        <AssessmentDetailsPrint title="Genitourinary" data={assessment.genitourinary_assessment} />
-                        <AssessmentDetailsPrint title="Musculoskeletal" data={assessment.musculoskeletal_assessment} />
-                        <AssessmentDetailsPrint title="Neurological" data={assessment.neurological_assessment} />
-                    </div>
-                ))}
-            </div>
-
-        </div>
-    )
-}
 
 // -----------------------------------------------------------------------------
 // EditPatientDialog
@@ -2084,15 +1905,15 @@ const PatientRecord = () => {
         />
       )}
 
-      {/* RENDER PRINTABLE RECORD (HIDDEN BY DEFAULT) */}
+      {/* RENDER PRINTABLE PATIENT REPORT (HIDDEN BY DEFAULT - Shows on print) */}
       {patient && (
-        <PrintableRecord
+        <PrintablePatientReport
           patient={patient}
+          attendingDoctorName={attendingDoctorName}
           vitalSigns={vitalSigns}
           assessments={assessments}
           labs={labs}
           imaging={imaging}
-          attendingDoctorName={attendingDoctorName}
         />
       )}
     </div>
