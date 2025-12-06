@@ -150,7 +150,7 @@ const PrintablePatientReport = ({
   };
 
   return (
-    <div className="hidden print:block bg-white text-black">
+    <div className="hidden print:block printable-report bg-white text-black">
       {/* PAGE 1: OVERVIEW */}
       <div className="print-page">
         <PageHeader pageTitle="Patient Overview" />
