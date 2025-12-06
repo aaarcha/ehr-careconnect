@@ -15,7 +15,7 @@ import { FDARNotes } from "@/components/clinical/FDARNotes";
 import { MedicationAdministration } from "@/components/clinical/MedicationAdministration";
 import { IntakeOutputRecord } from "@/components/clinical/IntakeOutputRecord";
 import { IVFluidMonitoring } from "@/components/clinical/IVFluidMonitoring";
-import PrintablePatientReport from "@/components/clinical/PrintablePatientReport";
+import PrintPreviewDialog from "@/components/clinical/PrintPreviewDialog";
 import { format, differenceInYears } from "date-fns";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -1378,9 +1378,7 @@ const PatientRecord = () => {
     }
   };
 
-  const handlePrint = () => {
-    window.print();
-  };
+  const [showPrintDialog, setShowPrintDialog] = useState(false);
 
   // TYPE-SAFE GENERIC DELETE HANDLER FOR INDIVIDUAL RECORDS
   const handleDeleteRecord = useCallback(async (table: DeletableRecordTable, idToDelete: string, recordName: string) => {
@@ -1445,9 +1443,20 @@ const PatientRecord = () => {
         </Button>
         <div className="flex space-x-2">
             
-          <Button variant="outline" onClick={handlePrint}>
+          <Button variant="outline" onClick={() => setShowPrintDialog(true)}>
             <Printer className="mr-2 h-4 w-4" /> Print Record
           </Button>
+
+          <PrintPreviewDialog
+            open={showPrintDialog}
+            onOpenChange={setShowPrintDialog}
+            patient={patient}
+            attendingDoctorName={attendingDoctorName}
+            vitalSigns={vitalSigns}
+            assessments={assessments}
+            labs={labs}
+            imaging={imaging}
+          />
 
           <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
             <DialogTrigger asChild>
@@ -1905,17 +1914,6 @@ const PatientRecord = () => {
         />
       )}
 
-      {/* RENDER PRINTABLE PATIENT REPORT (HIDDEN BY DEFAULT - Shows on print) */}
-      {patient && (
-        <PrintablePatientReport
-          patient={patient}
-          attendingDoctorName={attendingDoctorName}
-          vitalSigns={vitalSigns}
-          assessments={assessments}
-          labs={labs}
-          imaging={imaging}
-        />
-      )}
     </div>
   );
 };
