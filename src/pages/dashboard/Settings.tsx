@@ -118,15 +118,24 @@ const Settings = () => {
     
     setSaving(true);
     try {
+      // Get current user email to check if it changed
+      const { data: { user } } = await supabase.auth.getUser();
+      const currentEmail = user?.email;
+      
       // Update email if changed
-      if (profileData.email) {
+      if (profileData.email && profileData.email !== currentEmail) {
         const { error: emailError } = await supabase.auth.updateUser({
           email: profileData.email,
         });
         if (emailError) throw emailError;
+        
+        // Email change requires confirmation
+        toast.success("Confirmation email sent! Please check your new email inbox and click the confirmation link to complete the change.", {
+          duration: 8000,
+        });
+      } else {
+        toast.success("Profile updated successfully");
       }
-      
-      toast.success("Profile updated successfully");
     } catch (error: any) {
       toast.error(error.message || "Failed to update profile");
     } finally {
