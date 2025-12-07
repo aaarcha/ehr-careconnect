@@ -7,12 +7,197 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Settings as SettingsIcon, User, Bell, Database, Moon, Sun, Laptop } from "lucide-react";
+import { Settings as SettingsIcon, User, Bell, Database, Moon, Sun, Laptop, Loader2 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 
 const Settings = () => {
   const { theme, setTheme } = useTheme();
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
+  
+  // Profile state
+  const [profileData, setProfileData] = useState({
+    name: '',
+    email: '',
+    phone: '',
+  });
+  
+  // Notification preferences
+  const [notifications, setNotifications] = useState({
+    emailNotifications: true,
+    patientAlerts: true,
+    systemUpdates: true,
+  });
+  
+  // System preferences
+  const [systemPrefs, setSystemPrefs] = useState({
+    autoSave: true,
+  });
+
+  useEffect(() => {
+    fetchUserData();
+  }, []);
+
+  const fetchUserData = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setLoading(false);
+        return;
+      }
+      
+      setUserId(user.id);
+      setProfileData(prev => ({
+        ...prev,
+        email: user.email || '',
+      }));
+
+      // Fetch user preferences from database
+      const { data: prefs, error } = await supabase
+        .from('user_preferences')
+        .select('*')
+        .eq('user_id', user.id)
+        .single();
+
+      if (prefs) {
+        setNotifications({
+          emailNotifications: prefs.email_notifications ?? true,
+          patientAlerts: prefs.patient_alerts ?? true,
+          systemUpdates: prefs.system_updates ?? true,
+        });
+        setSystemPrefs({
+          autoSave: prefs.auto_save ?? true,
+        });
+      }
+
+      // Try to get user's name from user_roles or auth metadata
+      const { data: roleData } = await supabase
+        .from('user_roles')
+        .select('account_number, role')
+        .eq('user_id', user.id)
+        .single();
+
+      if (roleData) {
+        // Try to find the staff name based on role
+        if (roleData.role === 'staff' && roleData.account_number) {
+          setProfileData(prev => ({ ...prev, name: roleData.account_number }));
+        } else if (roleData.role === 'medtech' && roleData.account_number) {
+          const { data: medtech } = await supabase
+            .from('medtechs')
+            .select('name')
+            .eq('account_number', roleData.account_number)
+            .single();
+          if (medtech) {
+            setProfileData(prev => ({ ...prev, name: medtech.name }));
+          }
+        } else if (roleData.role === 'radtech' && roleData.account_number) {
+          const { data: radtech } = await supabase
+            .from('radtechs')
+            .select('name')
+            .eq('account_number', roleData.account_number)
+            .single();
+          if (radtech) {
+            setProfileData(prev => ({ ...prev, name: radtech.name }));
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching user data:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSaveProfile = async () => {
+    if (!userId) {
+      toast.error("You must be logged in to update profile");
+      return;
+    }
+    
+    setSaving(true);
+    try {
+      // Update email if changed
+      if (profileData.email) {
+        const { error: emailError } = await supabase.auth.updateUser({
+          email: profileData.email,
+        });
+        if (emailError) throw emailError;
+      }
+      
+      toast.success("Profile updated successfully");
+    } catch (error: any) {
+      toast.error(error.message || "Failed to update profile");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveNotifications = async () => {
+    if (!userId) {
+      toast.error("You must be logged in to save preferences");
+      return;
+    }
+    
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('user_preferences')
+        .upsert({
+          user_id: userId,
+          email_notifications: notifications.emailNotifications,
+          patient_alerts: notifications.patientAlerts,
+          system_updates: notifications.systemUpdates,
+          updated_at: new Date().toISOString(),
+        }, {
+          onConflict: 'user_id',
+        });
+
+      if (error) throw error;
+      toast.success("Notification preferences saved");
+    } catch (error: any) {
+      toast.error(error.message || "Failed to save preferences");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveSystemSettings = async () => {
+    if (!userId) {
+      toast.error("You must be logged in to save settings");
+      return;
+    }
+    
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('user_preferences')
+        .upsert({
+          user_id: userId,
+          auto_save: systemPrefs.autoSave,
+          theme: theme,
+          updated_at: new Date().toISOString(),
+        }, {
+          onConflict: 'user_id',
+        });
+
+      if (error) throw error;
+      toast.success("System settings saved");
+    } catch (error: any) {
+      toast.error(error.message || "Failed to save settings");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -43,17 +228,37 @@ const Settings = () => {
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="name">Full Name</Label>
-                <Input id="name" placeholder="Your name" />
+                <Input 
+                  id="name" 
+                  placeholder="Your name" 
+                  value={profileData.name}
+                  onChange={(e) => setProfileData(prev => ({ ...prev, name: e.target.value }))}
+                  disabled
+                />
+                <p className="text-xs text-muted-foreground">Name is managed by your administrator</p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
-                <Input id="email" type="email" placeholder="your.email@example.com" />
+                <Input 
+                  id="email" 
+                  type="email" 
+                  placeholder="your.email@example.com"
+                  value={profileData.email}
+                  onChange={(e) => setProfileData(prev => ({ ...prev, email: e.target.value }))}
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="phone">Phone</Label>
-                <Input id="phone" type="tel" placeholder="+1 (555) 000-0000" />
+                <Input 
+                  id="phone" 
+                  type="tel" 
+                  placeholder="+1 (555) 000-0000"
+                  value={profileData.phone}
+                  onChange={(e) => setProfileData(prev => ({ ...prev, phone: e.target.value }))}
+                />
               </div>
-              <Button onClick={() => toast.success("Profile updated successfully")}>
+              <Button onClick={handleSaveProfile} disabled={saving}>
+                {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 Save Changes
               </Button>
             </CardContent>
@@ -75,23 +280,33 @@ const Settings = () => {
                   <Label>Email Notifications</Label>
                   <p className="text-sm text-muted-foreground">Receive notifications via email</p>
                 </div>
-                <Switch />
+                <Switch 
+                  checked={notifications.emailNotifications}
+                  onCheckedChange={(checked) => setNotifications(prev => ({ ...prev, emailNotifications: checked }))}
+                />
               </div>
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
                   <Label>Patient Alerts</Label>
                   <p className="text-sm text-muted-foreground">Get notified about patient updates</p>
                 </div>
-                <Switch defaultChecked />
+                <Switch 
+                  checked={notifications.patientAlerts}
+                  onCheckedChange={(checked) => setNotifications(prev => ({ ...prev, patientAlerts: checked }))}
+                />
               </div>
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
                   <Label>System Updates</Label>
                   <p className="text-sm text-muted-foreground">Notifications about system changes</p>
                 </div>
-                <Switch defaultChecked />
+                <Switch 
+                  checked={notifications.systemUpdates}
+                  onCheckedChange={(checked) => setNotifications(prev => ({ ...prev, systemUpdates: checked }))}
+                />
               </div>
-              <Button onClick={() => toast.success("Notification preferences saved")}>
+              <Button onClick={handleSaveNotifications} disabled={saving}>
+                {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 Save Preferences
               </Button>
             </CardContent>
@@ -142,13 +357,17 @@ const Settings = () => {
                   <Label>Auto-save</Label>
                   <p className="text-sm text-muted-foreground">Automatically save changes</p>
                 </div>
-                <Switch defaultChecked />
+                <Switch 
+                  checked={systemPrefs.autoSave}
+                  onCheckedChange={(checked) => setSystemPrefs(prev => ({ ...prev, autoSave: checked }))}
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="language">Language</Label>
                 <Input id="language" value="English" disabled />
               </div>
-              <Button onClick={() => toast.success("System settings saved")}>
+              <Button onClick={handleSaveSystemSettings} disabled={saving}>
+                {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 Save Settings
               </Button>
             </CardContent>
