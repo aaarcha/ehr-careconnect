@@ -142,7 +142,7 @@ const AddPatient = () => {
         bmi: bmi ? parseFloat(bmi) : null,
         contact_number: contactNumber,
         address,
-        history_of_present_illness: historyPresentIllness,
+        history_present_illness: historyPresentIllness,
         problem_list: problemList ? problemList.split(",").map(p => p.trim()) : null,
         allergies: allergies ? allergies.split(",").map(a => a.trim()) : null,
         current_medications: currentMedications ? currentMedications.split(",").map(m => m.trim()) : null,
