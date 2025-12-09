@@ -91,7 +91,7 @@ interface Patient {
   past_medical_history?: PastMedicalHistory;
   personal_social_history?: PersonalSocialHistory;
   family_history?: FamilyHistory;
-  history_of_present_illness?: string;
+  history_present_illness?: string;
 }
 
 interface AssessmentFormState {
@@ -176,7 +176,7 @@ interface EditPatientForm {
   past_medical_history: PastMedicalHistory;
   personal_social_history: PersonalSocialHistory;
   family_history: FamilyHistory;
-  history_of_present_illness?: string;
+  history_present_illness?: string;
   vital_signs?: any;
 }
 
@@ -372,7 +372,7 @@ const EditPatientDialog = ({
       // @ts-ignore
       [Symbol('index_key')]: true 
     },
-    history_of_present_illness: patient.history_of_present_illness,
+    history_present_illness: patient.history_present_illness,
     vital_signs: {}
   }));
 
@@ -407,7 +407,7 @@ const EditPatientDialog = ({
         hypertension: false, diabetes: false, heartDisease: false, cancer: false, tuberculosis: false, others: "",
         [Symbol('index_key')]: true 
       },
-      history_of_present_illness: patient.history_of_present_illness,
+      history_present_illness: patient.history_present_illness,
       vital_signs: vitalSigns[0] || {}
     });
     
@@ -771,11 +771,11 @@ const EditPatientDialog = ({
                     <AccordionContent>
                       <div className="space-y-4">
                         <div className="space-y-2">
-                          <Label htmlFor="history_of_present_illness">History of Present Illness</Label>
+                          <Label htmlFor="history_present_illness">History of Present Illness</Label>
                           <Textarea 
-                            id="history_of_present_illness" 
-                            value={formData.history_of_present_illness || ""} 
-                            onChange={(e) => handleInputChange("history_of_present_illness", e.target.value)} 
+                            id="history_present_illness" 
+                            value={formData.history_present_illness || ""} 
+                            onChange={(e) => handleInputChange("history_present_illness", e.target.value)} 
                             rows={4} 
                           />
                         </div>
@@ -1348,7 +1348,7 @@ const PatientRecord = () => {
           past_medical_history: updatedData.past_medical_history,
           personal_social_history: updatedData.personal_social_history,
           family_history: updatedData.family_history,
-          history_of_present_illness: updatedData.history_of_present_illness,
+          history_present_illness: updatedData.history_present_illness,
         })
         .eq('id', id);
 
@@ -1543,7 +1543,7 @@ const PatientRecord = () => {
             </CardHeader>
             <CardContent>
               <p className="text-sm text-gray-700">
-                {patient.history_of_present_illness || "N/A"}
+                {patient.history_present_illness || "N/A"}
               </p>
             </CardContent>
           </Card>

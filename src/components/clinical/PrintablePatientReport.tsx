@@ -24,7 +24,7 @@ interface PrintablePatientReportProps {
     past_medical_history?: any;
     personal_social_history?: any;
     family_history?: any;
-    history_of_present_illness?: string;
+    history_present_illness?: string;
   };
   attendingDoctorName: string | null;
   vitalSigns: any[];
@@ -175,7 +175,7 @@ const PrintablePatientReport = ({
 
         <div className="mb-4">
           <h3 className="font-bold text-base border-b-2 mb-2">History of Present Illness</h3>
-          <p className="text-sm">{patient.history_of_present_illness || 'N/A'}</p>
+          <p className="text-sm">{patient.history_present_illness || 'N/A'}</p>
         </div>
 
         <div className="grid grid-cols-3 gap-4 mb-4">

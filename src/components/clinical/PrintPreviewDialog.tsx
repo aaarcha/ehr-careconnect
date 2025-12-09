@@ -38,7 +38,7 @@ interface PrintPreviewDialogProps {
     past_medical_history?: any;
     personal_social_history?: any;
     family_history?: any;
-    history_of_present_illness?: string;
+    history_present_illness?: string;
   };
   attendingDoctorName: string | null;
   vitalSigns: any[];
@@ -240,7 +240,7 @@ export const PrintPreviewDialog = ({
         <div class="section-title">Admitting Diagnosis</div>
         <p style="margin-bottom: 12px;">${patient.admitting_diagnosis || 'N/A'}</p>
         <div class="section-title">History of Present Illness</div>
-        <p style="margin-bottom: 12px;">${patient.history_of_present_illness || 'N/A'}</p>
+        <p style="margin-bottom: 12px;">${patient.history_present_illness || 'N/A'}</p>
       </div>`;
     }
 
@@ -600,7 +600,7 @@ export const PrintPreviewDialog = ({
                     <div className="section-title">Admitting Diagnosis</div>
                     <p style={{ marginBottom: '12px' }}>{patient.admitting_diagnosis || 'N/A'}</p>
                     <div className="section-title">History of Present Illness</div>
-                    <p style={{ marginBottom: '12px' }}>{patient.history_of_present_illness || 'N/A'}</p>
+                    <p style={{ marginBottom: '12px' }}>{patient.history_present_illness || 'N/A'}</p>
                     <div className="section-title">Medical History</div>
                     <HistorySection title="Past Medical History" history={patient.past_medical_history} />
                     <HistorySection title="Personal & Social History" history={patient.personal_social_history} />
