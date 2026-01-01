@@ -141,6 +141,36 @@ const Imaging = () => {
     setPatients(data || []);
   };
 
+  // File validation constants
+  const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB max for medical images
+  const ALLOWED_FILE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'image/tiff'];
+  const ALLOWED_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'tiff', 'tif'];
+
+  const validateImageFile = (file: File): { valid: boolean; error?: string } => {
+    // Check file size
+    if (file.size > MAX_FILE_SIZE) {
+      return { valid: false, error: `File too large. Maximum size is ${MAX_FILE_SIZE / (1024 * 1024)}MB` };
+    }
+
+    // Check MIME type
+    if (!ALLOWED_FILE_TYPES.includes(file.type)) {
+      return { valid: false, error: 'Invalid file type. Only JPEG, PNG, GIF, WebP, BMP, and TIFF images are allowed' };
+    }
+
+    // Check file extension
+    const extension = file.name.split('.').pop()?.toLowerCase();
+    if (!extension || !ALLOWED_EXTENSIONS.includes(extension)) {
+      return { valid: false, error: 'Invalid file extension. Please upload a valid image file' };
+    }
+
+    // Sanitize filename - check for path traversal attempts
+    if (file.name.includes('..') || file.name.includes('/') || file.name.includes('\\')) {
+      return { valid: false, error: 'Invalid filename detected' };
+    }
+
+    return { valid: true };
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -149,14 +179,25 @@ const Imaging = () => {
       return;
     }
 
+    // Validate image file if selected
+    if (imageFile) {
+      const validation = validateImageFile(imageFile);
+      if (!validation.valid) {
+        toast.error(validation.error || 'Invalid file');
+        return;
+      }
+    }
+
     setUploading(true);
     let file_path = "";
 
     try {
-      // Upload file if selected
+      // Upload file if selected (already validated above)
       if (imageFile) {
-        const fileExt = imageFile.name.split('.').pop();
-        const fileName = `${formData.patient_id}/${Date.now()}.${fileExt}`;
+        // Generate safe filename with sanitized extension
+        const extension = imageFile.name.split('.').pop()?.toLowerCase() || 'jpg';
+        const safeExtension = ALLOWED_EXTENSIONS.includes(extension) ? extension : 'jpg';
+        const fileName = `${formData.patient_id}/${Date.now()}.${safeExtension}`;
         
         const { error: uploadError } = await supabase.storage
           .from('imaging-files')
