@@ -22,18 +22,64 @@ Deno.serve(async (req) => {
       { auth: { autoRefreshToken: false, persistSession: false } }
     )
 
-    const { email, password } = await req.json()
-    console.log('Email:', email)
-
-    if (email !== 'staff001@careconnect.com') {
+    // Verify JWT authentication
+    const authHeader = req.headers.get('Authorization')
+    if (!authHeader) {
+      console.log('No authorization header provided')
       return new Response(
-        JSON.stringify({ error: 'Unauthorized' }),
+        JSON.stringify({ error: 'Authorization required' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    const token = authHeader.replace('Bearer ', '')
+    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token)
+    
+    if (authError || !user) {
+      console.log('Invalid token or user not found:', authError?.message)
+      return new Response(
+        JSON.stringify({ error: 'Invalid authentication' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // Verify user has staff role
+    const { data: roleData, error: roleError } = await supabaseAdmin
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', user.id)
+      .single()
+
+    if (roleError || roleData?.role !== 'staff') {
+      console.log('User does not have staff role:', roleError?.message || roleData?.role)
+      return new Response(
+        JSON.stringify({ error: 'Insufficient permissions. Staff role required.' }),
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
-    // List all users and check if staff email exists
-    console.log('Listing all users...')
+    const { email, password } = await req.json()
+    console.log('Authenticated staff member requesting password reset for:', email)
+
+    // Validate email format and allowed domains
+    const allowedEmailPattern = /^[a-z0-9_]+@careconnect\.com$/i
+    if (!email || !allowedEmailPattern.test(email)) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid email format. Must be a valid CareConnect email.' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // Validate password strength
+    if (!password || password.length < 8) {
+      return new Response(
+        JSON.stringify({ error: 'Password must be at least 8 characters long.' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // List all users and check if target email exists
+    console.log('Listing users to find target email...')
     const { data: usersData, error: listError } = await supabaseAdmin.auth.admin.listUsers({
       page: 1,
       perPage: 1000
@@ -45,11 +91,8 @@ Deno.serve(async (req) => {
     }
     
     const allUsers = usersData?.users || []
-    console.log('Total users:', allUsers.length)
-    allUsers.forEach(u => console.log('User:', u.id, u.email))
-    
     const existingUser = allUsers.find(u => u.email === email)
-    console.log('Existing user found:', !!existingUser, existingUser?.id)
+    console.log('Target user found:', !!existingUser, existingUser?.id)
 
     if (existingUser) {
       console.log('Updating password for user:', existingUser.id)
@@ -63,17 +106,17 @@ Deno.serve(async (req) => {
         throw updateError
       }
       
-      console.log('Password updated successfully')
+      console.log('Password updated successfully by staff member:', user.email)
 
-      // Ensure user_role exists
-      const { error: roleError } = await supabaseAdmin.from('user_roles').upsert({
+      // Ensure user_role exists for the target user
+      const { error: roleUpsertError } = await supabaseAdmin.from('user_roles').upsert({
         user_id: existingUser.id,
         role: 'staff',
-        account_number: 'STAFF001'
+        account_number: email.split('@')[0].toUpperCase()
       }, { onConflict: 'user_id' })
       
-      if (roleError) {
-        console.error('Error upserting role:', roleError)
+      if (roleUpsertError) {
+        console.error('Error upserting role:', roleUpsertError)
       }
 
       return new Response(
@@ -81,11 +124,9 @@ Deno.serve(async (req) => {
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     } else {
-      // User doesn't exist in listUsers but might exist with issues
-      // Try to delete by iterating and finding similar emails, then create fresh
-      console.log('User not found in list, attempting to create...')
+      // User doesn't exist, create new user
+      console.log('User not found, creating new account...')
       
-      // First try to create - if it fails with duplicate, we know it exists somewhere
       const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
         email,
         password,
@@ -95,16 +136,14 @@ Deno.serve(async (req) => {
       if (createError) {
         console.error('Error creating user:', createError.message)
         
-        // If duplicate error, try to find and delete the problematic user
         if (createError.message.includes('duplicate') || createError.message.includes('already')) {
-          console.log('Duplicate detected, trying alternative approach...')
+          console.log('Duplicate detected, trying invite approach...')
           
-          // Try inviting the user instead (this might work around the issue)
-          const { data: inviteData, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(email)
+          const { error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(email)
           
           if (inviteError) {
             console.error('Invite also failed:', inviteError)
-            throw createError // Throw the original error
+            throw createError
           }
           
           return new Response(
@@ -118,15 +157,15 @@ Deno.serve(async (req) => {
       
       console.log('User created:', newUser?.user?.id)
 
-      // Create user_role
-      const { error: roleError } = await supabaseAdmin.from('user_roles').upsert({
+      // Create user_role for new user
+      const { error: roleCreateError } = await supabaseAdmin.from('user_roles').upsert({
         user_id: newUser.user.id,
         role: 'staff',
-        account_number: 'STAFF001'
+        account_number: email.split('@')[0].toUpperCase()
       }, { onConflict: 'user_id' })
       
-      if (roleError) {
-        console.error('Error creating role:', roleError)
+      if (roleCreateError) {
+        console.error('Error creating role:', roleCreateError)
       }
 
       return new Response(
