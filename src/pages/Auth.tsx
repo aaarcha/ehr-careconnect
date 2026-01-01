@@ -25,44 +25,41 @@ const Auth = () => {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    if (!accountNumber.trim()) {
+      toast.error('Please enter your Staff Account ID');
+      return;
+    }
+
+    if (!password.trim()) {
+      toast.error('Please enter your password');
+      return;
+    }
+    
     try {
       setLoading(true);
 
-      // Use existing staff account email
-      const email = 'staff001@careconnect.com';
+      // Generate email from account number (e.g., STAFF001 -> staff001@careconnect.com)
+      const email = `${accountNumber.toLowerCase().trim()}@careconnect.com`;
 
-      // Try to sign in - if fails, update password via edge function
-      let { error } = await supabase.auth.signInWithPassword({
+      const { error } = await supabase.auth.signInWithPassword({
         email,
         password
       });
 
-      if (error?.message?.includes('Invalid login credentials')) {
-        toast.info('Setting up staff account...');
-        
-        const { data, error: fnError } = await supabase.functions.invoke('reset-staff-password', {
-          body: { email, password }
-        });
-
-        if (fnError) throw fnError;
-        if (data?.error) throw new Error(data.error);
-
-        // Try login again
-        const { error: retryError } = await supabase.auth.signInWithPassword({
-          email,
-          password
-        });
-        
-        if (retryError) throw retryError;
-        toast.success('Staff account ready!');
-      } else if (error) {
-        throw error;
+      if (error) {
+        // Provide user-friendly error messages without exposing internal details
+        if (error.message?.includes('Invalid login credentials')) {
+          toast.error('Invalid account ID or password');
+        } else {
+          toast.error('Login failed. Please try again.');
+        }
+        return;
       }
 
       navigate('/dashboard');
       
     } catch (error: any) {
-      toast.error(error.message);
+      toast.error('An unexpected error occurred. Please try again.');
     } finally {
       setLoading(false);
     }
