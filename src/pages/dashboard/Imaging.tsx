@@ -14,6 +14,7 @@ import { Plus, Edit, Trash2, Scan, Settings, Image as ImageIcon } from "lucide-r
 import { format } from "date-fns";
 import { imagingSchema } from "@/lib/validation";
 import { z } from "zod";
+import { SecureImageViewer } from "@/components/clinical/SecureImageViewer";
 
 interface RadTech {
   id: string;
@@ -29,6 +30,7 @@ interface ImagingResult {
   findings: string;
   notes: string;
   image_url: string;
+  file_path?: string;
   imaging_date: string;
   patients?: {
     name: string;
@@ -148,7 +150,7 @@ const Imaging = () => {
     }
 
     setUploading(true);
-    let image_url = "";
+    let file_path = "";
 
     try {
       // Upload file if selected
@@ -156,17 +158,14 @@ const Imaging = () => {
         const fileExt = imageFile.name.split('.').pop();
         const fileName = `${formData.patient_id}/${Date.now()}.${fileExt}`;
         
-        const { data: uploadData, error: uploadError } = await supabase.storage
+        const { error: uploadError } = await supabase.storage
           .from('imaging-files')
           .upload(fileName, imageFile);
 
         if (uploadError) throw uploadError;
 
-        const { data: { publicUrl } } = supabase.storage
-          .from('imaging-files')
-          .getPublicUrl(fileName);
-        
-        image_url = publicUrl;
+        // Store the file path instead of public URL (bucket is now private)
+        file_path = fileName;
       }
 
       const imagingData = {
@@ -175,7 +174,8 @@ const Imaging = () => {
         imaging_type: formData.imaging_type,
         findings: formData.findings,
         notes: formData.notes,
-        image_url,
+        file_path, // Use file_path for private bucket storage
+        image_url: "", // Clear deprecated public URL field
       };
 
       try {
@@ -206,6 +206,22 @@ const Imaging = () => {
     } finally {
       setUploading(false);
     }
+  };
+
+  // Generate signed URL for private bucket access
+  const getSignedImageUrl = async (filePath: string): Promise<string | null> => {
+    if (!filePath) return null;
+    
+    const { data, error } = await supabase.storage
+      .from('imaging-files')
+      .createSignedUrl(filePath, 3600); // 1 hour expiry
+    
+    if (error) {
+      console.error('Error creating signed URL:', error);
+      return null;
+    }
+    
+    return data.signedUrl;
   };
 
   const handleRadtechSubmit = async (e: React.FormEvent) => {
@@ -494,15 +510,13 @@ const Imaging = () => {
                         </div>
                       )}
                       
-                      {result.image_url && (
+                      {(result.file_path || result.image_url) && (
                         <div className="border rounded-lg overflow-hidden">
-                          <img 
-                            src={result.image_url} 
+                          <SecureImageViewer
+                            filePath={result.file_path}
+                            imageUrl={result.image_url}
                             alt={result.imaging_type}
                             className="w-full h-48 object-cover"
-                            onError={(e) => {
-                              e.currentTarget.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300'%3E%3Crect fill='%23f3f4f6' width='400' height='300'/%3E%3Ctext fill='%239ca3af' font-family='sans-serif' font-size='18' dy='10.5' font-weight='bold' x='50%25' y='50%25' text-anchor='middle'%3EImage not available%3C/text%3E%3C/svg%3E";
-                            }}
                           />
                         </div>
                       )}

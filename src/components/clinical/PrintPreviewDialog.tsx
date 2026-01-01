@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { format } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
+import DOMPurify from "dompurify";
 import {
   Dialog,
   DialogContent,
@@ -126,10 +127,16 @@ export const PrintPreviewDialog = ({
     setSelectedSections(allDeselected);
   };
 
+  // XSS sanitization helper - strips all HTML tags to prevent script injection
+  const sanitize = (value: string | null | undefined): string => {
+    if (value === null || value === undefined) return 'N/A';
+    return DOMPurify.sanitize(String(value), { ALLOWED_TAGS: [], ALLOWED_ATTR: [] });
+  };
+
   // Helper function to format JSON assessments into readable text
   const formatAssessment = (data: any): string => {
     if (!data) return 'N/A';
-    if (typeof data === 'string') return data;
+    if (typeof data === 'string') return sanitize(data);
     
     return Object.entries(data)
       .filter(([key, value]) => value && value !== '' && key !== 'notes')
@@ -137,9 +144,9 @@ export const PrintPreviewDialog = ({
         const formattedKey = key.replace(/_/g, ' ').replace(/([A-Z])/g, ' $1').trim();
         const capitalizedKey = formattedKey.charAt(0).toUpperCase() + formattedKey.slice(1);
         if (typeof value === 'boolean') {
-          return `${capitalizedKey}: ${value ? 'Yes' : 'No'}`;
+          return `${sanitize(capitalizedKey)}: ${value ? 'Yes' : 'No'}`;
         }
-        return `${capitalizedKey}: ${String(value)}`;
+        return `${sanitize(capitalizedKey)}: ${sanitize(String(value))}`;
       })
       .join(' | ');
   };
@@ -151,15 +158,15 @@ export const PrintPreviewDialog = ({
       if (times.length === 0) return '-';
       return times.map(t => {
         if (typeof t === 'object' && t !== null) {
-          return t.time || t.label || JSON.stringify(t);
+          return sanitize(t.time || t.label || JSON.stringify(t));
         }
-        return String(t);
+        return sanitize(String(t));
       }).join(', ');
     }
     if (typeof times === 'object') {
-      return Object.values(times).join(', ');
+      return Object.values(times).map(v => sanitize(String(v))).join(', ');
     }
-    return String(times);
+    return sanitize(String(times));
   };
 
   const generatePrintContent = () => {
@@ -213,13 +220,13 @@ export const PrintPreviewDialog = ({
     const pageHeader = (title: string) => `
       <div class="page-header">
         <div>
-          <h1>${patient.name}</h1>
-          <p>Hospital No: <strong>${patient.hospital_number}</strong></p>
-          <p>DOB: ${format(new Date(patient.date_of_birth), 'MMM dd, yyyy')} | Age: ${patient.age} | Sex: ${patient.sex}</p>
+          <h1>${sanitize(patient.name)}</h1>
+          <p>Hospital No: <strong>${sanitize(patient.hospital_number)}</strong></p>
+          <p>DOB: ${format(new Date(patient.date_of_birth), 'MMM dd, yyyy')} | Age: ${patient.age} | Sex: ${sanitize(patient.sex)}</p>
         </div>
         <div style="text-align: right;">
-          <h2>${title}</h2>
-          <p>Attending: ${attendingDoctorName || 'N/A'}</p>
+          <h2>${sanitize(title)}</h2>
+          <p>Attending: ${sanitize(attendingDoctorName) || 'N/A'}</p>
           <p style="color: #666;">Generated: ${format(new Date(), 'MMM dd, yyyy h:mm a')}</p>
         </div>
       </div>
@@ -230,17 +237,17 @@ export const PrintPreviewDialog = ({
       html += `<div class="print-page">
         ${pageHeader('Patient Overview')}
         <div class="info-grid">
-          <div class="info-item"><span class="info-label">Status:</span> ${patient.status?.toUpperCase() || 'N/A'}</div>
-          <div class="info-item"><span class="info-label">Department:</span> ${patient.admit_to_department || 'N/A'}</div>
-          <div class="info-item"><span class="info-label">Location:</span> ${patient.admit_to_location || 'N/A'}</div>
+          <div class="info-item"><span class="info-label">Status:</span> ${sanitize(patient.status?.toUpperCase()) || 'N/A'}</div>
+          <div class="info-item"><span class="info-label">Department:</span> ${sanitize(patient.admit_to_department) || 'N/A'}</div>
+          <div class="info-item"><span class="info-label">Location:</span> ${sanitize(patient.admit_to_location) || 'N/A'}</div>
           <div class="info-item"><span class="info-label">PhilHealth:</span> ${patient.philhealth ? 'Yes' : 'No'}</div>
-          <div class="info-item"><span class="info-label">Contact:</span> ${patient.contact_number || 'N/A'}</div>
-          <div class="info-item"><span class="info-label">Address:</span> ${patient.address || 'N/A'}</div>
+          <div class="info-item"><span class="info-label">Contact:</span> ${sanitize(patient.contact_number) || 'N/A'}</div>
+          <div class="info-item"><span class="info-label">Address:</span> ${sanitize(patient.address) || 'N/A'}</div>
         </div>
         <div class="section-title">Admitting Diagnosis</div>
-        <p style="margin-bottom: 12px;">${patient.admitting_diagnosis || 'N/A'}</p>
+        <p style="margin-bottom: 12px;">${sanitize(patient.admitting_diagnosis) || 'N/A'}</p>
         <div class="section-title">History of Present Illness</div>
-        <p style="margin-bottom: 12px;">${patient.history_present_illness || 'N/A'}</p>
+        <p style="margin-bottom: 12px;">${sanitize(patient.history_present_illness) || 'N/A'}</p>
       </div>`;
     }
 
@@ -255,11 +262,11 @@ export const PrintPreviewDialog = ({
               ${fdarNotes.map(note => `
                 <tr>
                   <td>${format(new Date(note.date_time), 'MMM dd, yyyy h:mm a')}</td>
-                  <td><strong>${note.focus}</strong></td>
-                  <td>${note.data || '-'}</td>
-                  <td>${note.action || '-'}</td>
-                  <td>${note.response || '-'}</td>
-                  <td>${note.nurse_name || '-'}</td>
+                  <td><strong>${sanitize(note.focus)}</strong></td>
+                  <td>${sanitize(note.data) || '-'}</td>
+                  <td>${sanitize(note.action) || '-'}</td>
+                  <td>${sanitize(note.response) || '-'}</td>
+                  <td>${sanitize(note.nurse_name) || '-'}</td>
                 </tr>
               `).join('')}
             </tbody>
@@ -279,12 +286,12 @@ export const PrintPreviewDialog = ({
               ${marRecords.map(record => `
                 <tr>
                   <td>${format(new Date(record.date), 'MMM dd, yyyy')}</td>
-                  <td><strong>${record.medication_name}</strong></td>
-                  <td>${record.dose}</td>
-                  <td>${record.route}</td>
+                  <td><strong>${sanitize(record.medication_name)}</strong></td>
+                  <td>${sanitize(record.dose)}</td>
+                  <td>${sanitize(record.route)}</td>
                   <td>${formatMARTimes(record.scheduled_times)}</td>
                   <td>${formatMARTimes(record.administered_times)}</td>
-                  <td>${record.nurse_initials || '-'}</td>
+                  <td>${sanitize(record.nurse_initials) || '-'}</td>
                   <td>${record.is_completed ? '✓ Complete' : 'Pending'}</td>
                 </tr>
               `).join('')}
@@ -311,7 +318,7 @@ export const PrintPreviewDialog = ({
                 <thead><tr><th>Time</th><th>Type</th><th>Amount (mL)</th><th>By</th></tr></thead>
                 <tbody>
                   ${intakeRecords.map(r => `
-                    <tr><td>${format(new Date(r.time), 'h:mm a')}</td><td>${r.type_description}</td><td style="text-align: right;">${r.amount}</td><td>${r.recorded_by || '-'}</td></tr>
+                    <tr><td>${format(new Date(r.time), 'h:mm a')}</td><td>${sanitize(r.type_description)}</td><td style="text-align: right;">${r.amount}</td><td>${sanitize(r.recorded_by) || '-'}</td></tr>
                   `).join('')}
                   <tr style="font-weight: bold; background: #f0f0f0;"><td colspan="2">Total Intake</td><td style="text-align: right;">${totalIntake} mL</td><td></td></tr>
                 </tbody>
@@ -325,7 +332,7 @@ export const PrintPreviewDialog = ({
                 <thead><tr><th>Time</th><th>Type</th><th>Amount (mL)</th><th>By</th></tr></thead>
                 <tbody>
                   ${outputRecords.map(r => `
-                    <tr><td>${format(new Date(r.time), 'h:mm a')}</td><td>${r.type_description}</td><td style="text-align: right;">${r.amount}</td><td>${r.recorded_by || '-'}</td></tr>
+                    <tr><td>${format(new Date(r.time), 'h:mm a')}</td><td>${sanitize(r.type_description)}</td><td style="text-align: right;">${r.amount}</td><td>${sanitize(r.recorded_by) || '-'}</td></tr>
                   `).join('')}
                   <tr style="font-weight: bold; background: #f0f0f0;"><td colspan="2">Total Output</td><td style="text-align: right;">${totalOutput} mL</td><td></td></tr>
                 </tbody>
@@ -348,13 +355,13 @@ export const PrintPreviewDialog = ({
               ${ivFluidRecords.map(r => `
                 <tr>
                   <td>${format(new Date(r.date), 'MMM dd, yyyy')}</td>
-                  <td>${r.room_no || '-'}</td>
+                  <td>${sanitize(r.room_no) || '-'}</td>
                   <td style="text-align: center;">${r.bottle_no || '-'}</td>
-                  <td><strong>${r.iv_solution}</strong></td>
-                  <td>${r.running_time || '-'}</td>
-                  <td>${r.time_started || '-'}</td>
-                  <td>${r.expected_time_to_consume || '-'}</td>
-                  <td>${r.remarks || '-'}</td>
+                  <td><strong>${sanitize(r.iv_solution)}</strong></td>
+                  <td>${sanitize(r.running_time) || '-'}</td>
+                  <td>${sanitize(r.time_started) || '-'}</td>
+                  <td>${sanitize(r.expected_time_to_consume) || '-'}</td>
+                  <td>${sanitize(r.remarks) || '-'}</td>
                 </tr>
               `).join('')}
             </tbody>
@@ -394,13 +401,13 @@ export const PrintPreviewDialog = ({
               ${vitalSigns.map(vs => `
                 <tr>
                   <td>${format(new Date(vs.recorded_at), 'MMM dd, yyyy h:mm a')}</td>
-                  <td>${vs.blood_pressure || '-'}</td>
+                  <td>${sanitize(vs.blood_pressure) || '-'}</td>
                   <td>${vs.heart_rate || '-'}</td>
                   <td>${vs.respiratory_rate || '-'}</td>
                   <td>${vs.temperature ? `${vs.temperature}°C` : '-'}</td>
                   <td>${vs.oxygen_saturation ? `${vs.oxygen_saturation}%` : '-'}</td>
                   <td>${vs.pain_scale !== null ? vs.pain_scale : '-'}</td>
-                  <td>${vs.notes || '-'}</td>
+                  <td>${sanitize(vs.notes) || '-'}</td>
                 </tr>
               `).join('')}
             </tbody>
@@ -420,12 +427,12 @@ export const PrintPreviewDialog = ({
               ${labs.map(lab => `
                 <tr class="${lab.flag === 'HIGH' ? 'flag-high' : lab.flag === 'LOW' ? 'flag-low' : ''}">
                   <td>${lab.test_date ? format(new Date(lab.test_date), 'MMM dd, yyyy') : '-'}</td>
-                  <td><strong>${lab.test_name}</strong></td>
+                  <td><strong>${sanitize(lab.test_name)}</strong></td>
                   <td>${lab.result_value ?? '-'}</td>
-                  <td>${lab.unit || '-'}</td>
-                  <td>${lab.normal_range || '-'}</td>
-                  <td style="font-weight: bold; color: ${lab.flag === 'HIGH' ? '#dc2626' : lab.flag === 'LOW' ? '#16a34a' : 'inherit'};">${lab.flag || '-'}</td>
-                  <td>${lab.notes || '-'}</td>
+                  <td>${sanitize(lab.unit) || '-'}</td>
+                  <td>${sanitize(lab.normal_range) || '-'}</td>
+                  <td style="font-weight: bold; color: ${lab.flag === 'HIGH' ? '#dc2626' : lab.flag === 'LOW' ? '#16a34a' : 'inherit'};">${sanitize(lab.flag) || '-'}</td>
+                  <td>${sanitize(lab.notes) || '-'}</td>
                 </tr>
               `).join('')}
             </tbody>
@@ -445,10 +452,10 @@ export const PrintPreviewDialog = ({
               ${imaging.map(img => `
                 <tr>
                   <td>${img.imaging_date ? format(new Date(img.imaging_date), 'MMM dd, yyyy') : '-'}</td>
-                  <td><strong>${img.imaging_type}</strong></td>
-                  <td>${img.category || '-'}</td>
-                  <td>${img.findings || '-'}</td>
-                  <td>${img.notes || '-'}</td>
+                  <td><strong>${sanitize(img.imaging_type)}</strong></td>
+                  <td>${sanitize(img.category) || '-'}</td>
+                  <td>${sanitize(img.findings) || '-'}</td>
+                  <td>${sanitize(img.notes) || '-'}</td>
                 </tr>
               `).join('')}
             </tbody>
