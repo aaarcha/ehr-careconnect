@@ -7,15 +7,17 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Settings as SettingsIcon, User, Bell, Database, Moon, Sun, Laptop, Loader2 } from "lucide-react";
+import { Settings as SettingsIcon, User, Bell, Database, Moon, Sun, Laptop, Loader2, Users } from "lucide-react";
 import { useTheme } from "next-themes";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { UserManagement } from "@/components/dashboard/UserManagement";
 
 const Settings = () => {
   const { theme, setTheme } = useTheme();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
+  const [userRole, setUserRole] = useState<string | null>(null);
   
   // Profile state
   const [profileData, setProfileData] = useState({
@@ -80,9 +82,19 @@ const Settings = () => {
         .single();
 
       if (roleData) {
+        setUserRole(roleData.role);
         // Try to find the staff name based on role
         if (roleData.role === 'staff' && roleData.account_number) {
           setProfileData(prev => ({ ...prev, name: roleData.account_number }));
+        } else if (roleData.role === 'doctor' && roleData.account_number) {
+          const { data: doctor } = await supabase
+            .from('doctors')
+            .select('name')
+            .eq('account_number', roleData.account_number)
+            .single();
+          if (doctor) {
+            setProfileData(prev => ({ ...prev, name: doctor.name }));
+          }
         } else if (roleData.role === 'medtech' && roleData.account_number) {
           const { data: medtech } = await supabase
             .from('medtechs')
@@ -219,10 +231,16 @@ const Settings = () => {
       </div>
 
       <Tabs defaultValue="profile" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className={`grid w-full ${userRole === 'staff' ? 'grid-cols-4' : 'grid-cols-3'}`}>
           <TabsTrigger value="profile">Profile</TabsTrigger>
           <TabsTrigger value="notifications">Notifications</TabsTrigger>
           <TabsTrigger value="system">System</TabsTrigger>
+          {userRole === 'staff' && (
+            <TabsTrigger value="users">
+              <Users className="h-4 w-4 mr-1" />
+              Users
+            </TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="profile">
@@ -382,6 +400,13 @@ const Settings = () => {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* User Management Tab - Staff Only */}
+        {userRole === 'staff' && (
+          <TabsContent value="users">
+            <UserManagement />
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   );

@@ -69,25 +69,31 @@ export type Database = {
       }
       doctors: {
         Row: {
+          account_number: string | null
           created_at: string | null
           id: string
           name: string
           specialty: Database["public"]["Enums"]["doctor_specialty"]
           updated_at: string | null
+          user_id: string | null
         }
         Insert: {
+          account_number?: string | null
           created_at?: string | null
           id?: string
           name: string
           specialty: Database["public"]["Enums"]["doctor_specialty"]
           updated_at?: string | null
+          user_id?: string | null
         }
         Update: {
+          account_number?: string | null
           created_at?: string | null
           id?: string
           name?: string
           specialty?: Database["public"]["Enums"]["doctor_specialty"]
           updated_at?: string | null
+          user_id?: string | null
         }
         Relationships: []
       }
@@ -692,6 +698,7 @@ export type Database = {
           spouse_guardian_name: string | null
           status: Database["public"]["Enums"]["patient_status"] | null
           updated_at: string | null
+          user_id: string | null
           weight: number | null
         }
         Insert: {
@@ -732,6 +739,7 @@ export type Database = {
           spouse_guardian_name?: string | null
           status?: Database["public"]["Enums"]["patient_status"] | null
           updated_at?: string | null
+          user_id?: string | null
           weight?: number | null
         }
         Update: {
@@ -772,6 +780,7 @@ export type Database = {
           spouse_guardian_name?: string | null
           status?: Database["public"]["Enums"]["patient_status"] | null
           updated_at?: string | null
+          user_id?: string | null
           weight?: number | null
         }
         Relationships: [

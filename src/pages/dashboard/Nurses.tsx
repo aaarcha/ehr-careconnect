@@ -24,6 +24,7 @@ const Nurses = () => {
   const [loading, setLoading] = useState(true);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [editingNurse, setEditingNurse] = useState<Nurse | null>(null);
+  const [userRole, setUserRole] = useState<string | null>(null);
   const [newNurse, setNewNurse] = useState<{
     name: string;
     nurse_no: string;
@@ -36,7 +37,25 @@ const Nurses = () => {
 
   useEffect(() => {
     fetchNurses();
+    fetchUserRole();
   }, []);
+
+  const fetchUserRole = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data } = await supabase
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", user.id)
+          .single();
+        
+        setUserRole(data?.role || null);
+      }
+    } catch (error) {
+      console.error("Error fetching user role:", error);
+    }
+  };
 
   const fetchNurses = async () => {
     try {
@@ -81,11 +100,7 @@ const Nurses = () => {
           .eq("id", editingNurse.id);
 
         if (error) throw error;
-
-        toast({
-          title: "Success",
-          description: "Nurse updated successfully",
-        });
+        toast({ title: "Success", description: "Nurse updated successfully" });
       } else {
         const { error } = await supabase.from("nurses").insert([{
           name: newNurse.name,
@@ -94,11 +109,7 @@ const Nurses = () => {
         }]);
 
         if (error) throw error;
-
-        toast({
-          title: "Success",
-          description: "Nurse added successfully",
-        });
+        toast({ title: "Success", description: "Nurse added successfully" });
       }
 
       setShowAddDialog(false);
@@ -107,58 +118,34 @@ const Nurses = () => {
       fetchNurses();
     } catch (error: any) {
       console.error("Error saving nurse:", error);
-      toast({
-        title: "Error",
-        description: "Failed to save nurse",
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: "Failed to save nurse", variant: "destructive" });
     }
   };
 
   const handleEditNurse = (nurse: Nurse) => {
     setEditingNurse(nurse);
-    setNewNurse({
-      name: nurse.name,
-      nurse_no: nurse.nurse_no,
-      department: nurse.department as any
-    });
+    setNewNurse({ name: nurse.name, nurse_no: nurse.nurse_no, department: nurse.department as any });
     setShowAddDialog(true);
   };
 
   const handleDeleteNurse = async (id: string) => {
     if (!confirm("Are you sure you want to delete this nurse?")) return;
-
     try {
-      const { error } = await supabase
-        .from("nurses")
-        .delete()
-        .eq("id", id);
-
+      const { error } = await supabase.from("nurses").delete().eq("id", id);
       if (error) throw error;
-
-      toast({
-        title: "Success",
-        description: "Nurse deleted successfully",
-      });
-
+      toast({ title: "Success", description: "Nurse deleted successfully" });
       fetchNurses();
     } catch (error: any) {
       console.error("Error deleting nurse:", error);
-      toast({
-        title: "Error",
-        description: "Failed to delete nurse",
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: "Failed to delete nurse", variant: "destructive" });
     }
   };
 
-  const getNursesByDepartment = (department: string) => {
-    return nurses.filter((nurse) => nurse.department === department);
-  };
+  const getNursesByDepartment = (department: string) => nurses.filter((nurse) => nurse.department === department);
+  const canManageNurses = userRole === "staff";
 
   const NurseTable = ({ department }: { department: string }) => {
     const departmentNurses = getNursesByDepartment(department);
-
     return (
       <Card>
         <CardHeader>
@@ -171,16 +158,14 @@ const Nurses = () => {
           {loading ? (
             <div className="text-center py-8 text-muted-foreground">Loading...</div>
           ) : departmentNurses.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              No nurses assigned to {department} yet.
-            </div>
+            <div className="text-center py-8 text-muted-foreground">No nurses assigned to {department} yet.</div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Name</TableHead>
                   <TableHead>Nurse No.</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  {canManageNurses && <TableHead className="text-right">Actions</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -188,16 +173,14 @@ const Nurses = () => {
                   <TableRow key={nurse.id}>
                     <TableCell className="font-medium">{nurse.name}</TableCell>
                     <TableCell>{nurse.nurse_no}</TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
-                        <Button size="sm" variant="ghost" onClick={() => handleEditNurse(nurse)}>
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button size="sm" variant="ghost" onClick={() => handleDeleteNurse(nurse.id)}>
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </div>
-                    </TableCell>
+                    {canManageNurses && (
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button size="sm" variant="ghost" onClick={() => handleEditNurse(nurse)}><Edit className="h-4 w-4" /></Button>
+                          <Button size="sm" variant="ghost" onClick={() => handleDeleteNurse(nurse.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                        </div>
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>
@@ -215,60 +198,42 @@ const Nurses = () => {
           <h1 className="text-3xl font-bold text-primary">Nursing Staff</h1>
           <p className="text-muted-foreground">Directory of nurses by department</p>
         </div>
-        <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="h-4 w-4 mr-2" />
-              Add Nurse
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>{editingNurse ? "Edit" : "Add New"} Nurse</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Full Name</Label>
-                <Input
-                  id="name"
-                  value={newNurse.name}
-                  onChange={(e) => setNewNurse({ ...newNurse, name: e.target.value })}
-                  placeholder="Enter full name"
-                />
+        {canManageNurses && (
+          <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
+            <DialogTrigger asChild>
+              <Button><Plus className="h-4 w-4 mr-2" />Add Nurse</Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>{editingNurse ? "Edit" : "Add New"} Nurse</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="name">Full Name</Label>
+                  <Input id="name" value={newNurse.name} onChange={(e) => setNewNurse({ ...newNurse, name: e.target.value })} placeholder="Enter full name" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="nurse_no">Nurse Number</Label>
+                  <Input id="nurse_no" value={newNurse.nurse_no} onChange={(e) => setNewNurse({ ...newNurse, nurse_no: e.target.value })} placeholder="e.g., N001" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="department">Department</Label>
+                  <Select value={newNurse.department} onValueChange={(value) => setNewNurse({ ...newNurse, department: value as typeof newNurse.department })}>
+                    <SelectTrigger><SelectValue placeholder="Select department" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="WARD">WARD</SelectItem>
+                      <SelectItem value="OR">OR</SelectItem>
+                      <SelectItem value="ICU">ICU</SelectItem>
+                      <SelectItem value="ER">ER</SelectItem>
+                      <SelectItem value="HEMO">HEMO</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button onClick={handleAddNurse} className="w-full">{editingNurse ? "Update" : "Add"} Nurse</Button>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="nurse_no">Nurse Number</Label>
-                <Input
-                  id="nurse_no"
-                  value={newNurse.nurse_no}
-                  onChange={(e) => setNewNurse({ ...newNurse, nurse_no: e.target.value })}
-                  placeholder="e.g., N001"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="department">Department</Label>
-                <Select
-                  value={newNurse.department}
-                  onValueChange={(value) => setNewNurse({ ...newNurse, department: value as typeof newNurse.department })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select department" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="WARD">WARD</SelectItem>
-                    <SelectItem value="OR">OR</SelectItem>
-                    <SelectItem value="ICU">ICU</SelectItem>
-                    <SelectItem value="ER">ER</SelectItem>
-                    <SelectItem value="HEMO">HEMO</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <Button onClick={handleAddNurse} className="w-full">
-                {editingNurse ? "Update" : "Add"} Nurse
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+            </DialogContent>
+          </Dialog>
+        )}
       </div>
 
       <Tabs defaultValue="WARD" className="space-y-4">
@@ -279,26 +244,11 @@ const Nurses = () => {
           <TabsTrigger value="ER">ER</TabsTrigger>
           <TabsTrigger value="HEMO">HEMO</TabsTrigger>
         </TabsList>
-
-        <TabsContent value="WARD">
-          <NurseTable department="WARD" />
-        </TabsContent>
-
-        <TabsContent value="OR">
-          <NurseTable department="OR" />
-        </TabsContent>
-
-        <TabsContent value="ICU">
-          <NurseTable department="ICU" />
-        </TabsContent>
-
-        <TabsContent value="ER">
-          <NurseTable department="ER" />
-        </TabsContent>
-
-        <TabsContent value="HEMO">
-          <NurseTable department="HEMO" />
-        </TabsContent>
+        <TabsContent value="WARD"><NurseTable department="WARD" /></TabsContent>
+        <TabsContent value="OR"><NurseTable department="OR" /></TabsContent>
+        <TabsContent value="ICU"><NurseTable department="ICU" /></TabsContent>
+        <TabsContent value="ER"><NurseTable department="ER" /></TabsContent>
+        <TabsContent value="HEMO"><NurseTable department="HEMO" /></TabsContent>
       </Tabs>
     </div>
   );
