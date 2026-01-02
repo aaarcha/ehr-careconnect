@@ -144,11 +144,10 @@ export function AppSidebar() {
       { title: "Dashboard", url: "/dashboard", icon: Home },
     ];
     
-    // STAFF/ADMIN MENU (Includes all requested items)
+    // STAFF/ADMIN MENU (Full access including user management)
     if (role === 'staff') {
       return [
         ...baseItems,
-        // Requested Items
         { title: "Decking", url: "/dashboard/decking", icon: Users },
         { title: "Nurses", url: "/dashboard/nurses", icon: UserCog },
         { title: "Patient Records", url: "/dashboard/patients", icon: FileText },
@@ -158,7 +157,20 @@ export function AppSidebar() {
       ];
     }
 
-    // MEDTECH MENU
+    // DOCTOR MENU (Full access to clinical features, no user management)
+    if (role === 'doctor') {
+      return [
+        ...baseItems,
+        { title: "Decking", url: "/dashboard/decking", icon: Users },
+        { title: "Nurses", url: "/dashboard/nurses", icon: UserCog },
+        { title: "Patient Records", url: "/dashboard/patients", icon: FileText },
+        { title: "Add Patient", url: "/dashboard/add-patient", icon: FilePlus },
+        { title: "Laboratory", url: "/dashboard/laboratory", icon: TestTube },
+        { title: "Imaging", url: "/dashboard/imaging", icon: Scan },
+      ];
+    }
+
+    // MEDTECH MENU (Limited to laboratory)
     if (role === 'medtech') {
       return [
         ...baseItems,
@@ -166,7 +178,7 @@ export function AppSidebar() {
       ];
     }
 
-    // RADTECH MENU
+    // RADTECH MENU (Limited to imaging)
     if (role === 'radtech') {
       return [
         ...baseItems,
@@ -174,7 +186,7 @@ export function AppSidebar() {
       ];
     }
 
-    // PATIENT MENU
+    // PATIENT MENU (Limited to own records)
     if (role === 'patient') {
       return [
         ...baseItems,
