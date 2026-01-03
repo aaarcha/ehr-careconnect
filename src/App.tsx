@@ -17,6 +17,7 @@ import PatientRecord from "./pages/dashboard/PatientRecord";
 import Settings from "./pages/dashboard/Settings";
 import Messages from "./pages/dashboard/Messages";
 import HelpSupport from "./pages/dashboard/HelpSupport";
+import MyRecords from "./pages/dashboard/MyRecords";
 import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./components/ProtectedRoute";
 
@@ -51,6 +52,7 @@ function App() {
               <Route path="decking" element={<Decking />} />
               <Route path="messages" element={<Messages />} />
               <Route path="help-support" element={<HelpSupport />} />
+              <Route path="my-records" element={<MyRecords />} />
             </Route>
             <Route path="*" element={<Navigate to="/auth" replace />} />
           </Routes>
