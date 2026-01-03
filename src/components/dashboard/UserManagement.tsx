@@ -382,14 +382,14 @@ export function UserManagement() {
                       <div className="space-y-2">
                         <Label>Link to Existing Doctor (Optional)</Label>
                         <Select 
-                          value={newUser.linkedId} 
-                          onValueChange={(value) => setNewUser(prev => ({ ...prev, linkedId: value }))}
+                          value={newUser.linkedId || "__new__"} 
+                          onValueChange={(value) => setNewUser(prev => ({ ...prev, linkedId: value === "__new__" ? "" : value }))}
                         >
                           <SelectTrigger>
                             <SelectValue placeholder="Select existing doctor" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="">Create new record</SelectItem>
+                            <SelectItem value="__new__">Create new record</SelectItem>
                             {doctors.map(doc => (
                               <SelectItem key={doc.id} value={doc.id}>
                                 {doc.name} ({doc.specialty})
