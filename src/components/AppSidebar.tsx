@@ -170,6 +170,17 @@ export function AppSidebar() {
       ];
     }
 
+    // NURSE MENU (Clinical documentation access)
+    if (role === 'nurse') {
+      return [
+        ...baseItems,
+        { title: "Nurses", url: "/dashboard/nurses", icon: UserCog },
+        { title: "Patient Records", url: "/dashboard/patients", icon: FileText },
+        { title: "Laboratory", url: "/dashboard/laboratory", icon: TestTube },
+        { title: "Imaging", url: "/dashboard/imaging", icon: Scan },
+      ];
+    }
+
     // MEDTECH MENU (Limited to laboratory)
     if (role === 'medtech') {
       return [
