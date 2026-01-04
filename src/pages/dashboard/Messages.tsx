@@ -37,6 +37,8 @@ interface StaffRecipient {
 
 const ROLE_OPTIONS = [
   { value: "staff", label: "Admin/Staff" },
+  { value: "doctor", label: "Doctor" },
+  { value: "nurse", label: "Nurse" },
   { value: "medtech", label: "MedTech" },
   { value: "radtech", label: "RadTech" },
 ];

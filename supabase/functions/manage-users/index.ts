@@ -6,12 +6,13 @@ const corsHeaders = {
 }
 
 interface UserCreateRequest {
-  role: 'staff' | 'doctor' | 'medtech' | 'radtech' | 'patient';
+  role: 'staff' | 'doctor' | 'medtech' | 'radtech' | 'patient' | 'nurse';
   name: string;
   accountNumber: string;
   password: string;
-  linkedId?: string; // For linking to existing patient/doctor records
+  linkedId?: string; // For linking to existing patient/doctor/nurse records
   specialty?: string; // For doctors
+  department?: string; // For nurses
 }
 
 Deno.serve(async (req) => {
@@ -118,6 +119,13 @@ Deno.serve(async (req) => {
             .eq('user_id', u.user_id)
             .single()
           if (patient) displayName = patient.name;
+        } else if (u.role === 'nurse') {
+          const { data: nurse } = await supabaseAdmin
+            .from('nurses')
+            .select('name')
+            .eq('user_id', u.user_id)
+            .single()
+          if (nurse) displayName = nurse.name;
         }
         
         return { ...u, display_name: displayName }
@@ -132,7 +140,7 @@ Deno.serve(async (req) => {
     // POST: Create or update user
     if (req.method === 'POST') {
       const body: UserCreateRequest = await req.json()
-      const { role, name, accountNumber, password, linkedId, specialty } = body
+      const { role, name, accountNumber, password, linkedId, specialty, department } = body
 
       console.log('Creating/updating user:', { role, name, accountNumber })
 
@@ -181,16 +189,42 @@ Deno.serve(async (req) => {
         userId = newUser.user.id
       }
 
+      // For patients, get the hospital_number from the linked patient record
+      let patientNumber = null;
+      if (role === 'patient' && linkedId) {
+        const { data: patientData } = await supabaseAdmin
+          .from('patients')
+          .select('hospital_number')
+          .eq('id', linkedId)
+          .single();
+        
+        if (patientData) {
+          patientNumber = patientData.hospital_number;
+        }
+      }
+
       // Upsert user_role
       const { error: roleUpsertError } = await supabaseAdmin.from('user_roles').upsert({
         user_id: userId,
         role: role,
         account_number: accountNumber.toUpperCase(),
-        patient_number: role === 'patient' ? accountNumber.toUpperCase() : null
+        patient_number: patientNumber
       }, { onConflict: 'user_id' })
       
       if (roleUpsertError) {
         console.error('Error upserting role:', roleUpsertError)
+        throw new Error(`Failed to assign role: ${roleUpsertError.message}`)
+      }
+
+      // Verify role was actually created
+      const { data: verifyRole, error: verifyError } = await supabaseAdmin
+        .from('user_roles')
+        .select('*')
+        .eq('user_id', userId)
+        .single();
+
+      if (verifyError || !verifyRole) {
+        throw new Error('Failed to verify role assignment');
       }
 
       // Link to respective table based on role
@@ -213,7 +247,8 @@ Deno.serve(async (req) => {
       } else if (role === 'medtech') {
         if (linkedId) {
           await supabaseAdmin.from('medtechs').update({
-            user_id: userId
+            user_id: userId,
+            account_number: accountNumber.toUpperCase()
           }).eq('id', linkedId)
         } else {
           await supabaseAdmin.from('medtechs').insert({
@@ -225,11 +260,29 @@ Deno.serve(async (req) => {
       } else if (role === 'radtech') {
         if (linkedId) {
           await supabaseAdmin.from('radtechs').update({
-            user_id: userId
+            user_id: userId,
+            account_number: accountNumber.toUpperCase()
           }).eq('id', linkedId)
         } else {
           await supabaseAdmin.from('radtechs').insert({
             name,
+            account_number: accountNumber.toUpperCase(),
+            user_id: userId
+          })
+        }
+      } else if (role === 'nurse') {
+        if (linkedId) {
+          // Update existing nurse record
+          await supabaseAdmin.from('nurses').update({
+            user_id: userId,
+            account_number: accountNumber.toUpperCase()
+          }).eq('id', linkedId)
+        } else {
+          // Create new nurse record
+          await supabaseAdmin.from('nurses').insert({
+            name,
+            nurse_no: accountNumber.toUpperCase(),
+            department: department || 'WARD',
             account_number: accountNumber.toUpperCase(),
             user_id: userId
           })

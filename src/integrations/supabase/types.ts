@@ -356,25 +356,31 @@ export type Database = {
       }
       nurses: {
         Row: {
+          account_number: string | null
           created_at: string | null
           department: Database["public"]["Enums"]["department_type"]
           id: string
           name: string
           nurse_no: string
+          user_id: string | null
         }
         Insert: {
+          account_number?: string | null
           created_at?: string | null
           department: Database["public"]["Enums"]["department_type"]
           id?: string
           name: string
           nurse_no: string
+          user_id?: string | null
         }
         Update: {
+          account_number?: string | null
           created_at?: string | null
           department?: Database["public"]["Enums"]["department_type"]
           id?: string
           name?: string
           nurse_no?: string
+          user_id?: string | null
         }
         Relationships: []
       }

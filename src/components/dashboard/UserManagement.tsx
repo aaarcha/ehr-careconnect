@@ -34,10 +34,30 @@ interface Doctor {
 const ROLE_OPTIONS = [
   { value: 'staff', label: 'Admin/Staff' },
   { value: 'doctor', label: 'Doctor' },
+  { value: 'nurse', label: 'Nurse' },
   { value: 'medtech', label: 'Laboratory Technician' },
   { value: 'radtech', label: 'Imaging Technician' },
   { value: 'patient', label: 'Patient' },
 ];
+
+interface Nurse {
+  id: string;
+  name: string;
+  nurse_no: string;
+  department: string;
+}
+
+interface MedTech {
+  id: string;
+  name: string;
+  account_number: string;
+}
+
+interface RadTech {
+  id: string;
+  name: string;
+  account_number: string;
+}
 
 const SPECIALTIES = [
   "General Practice", "Internal Medicine", "Cardiology", "Neurology",
@@ -56,9 +76,12 @@ export function UserManagement() {
   const [selectedUser, setSelectedUser] = useState<ManagedUser | null>(null);
   const [filterRole, setFilterRole] = useState<string>('all');
   
-  // Available patients and doctors for linking
+  // Available records for linking
   const [patients, setPatients] = useState<Patient[]>([]);
   const [doctors, setDoctors] = useState<Doctor[]>([]);
+  const [nurses, setNurses] = useState<Nurse[]>([]);
+  const [medtechs, setMedtechs] = useState<MedTech[]>([]);
+  const [radtechs, setRadtechs] = useState<RadTech[]>([]);
   
   // New user form state
   const [newUser, setNewUser] = useState({
@@ -68,6 +91,7 @@ export function UserManagement() {
     password: '',
     linkedId: '',
     specialty: 'General Practice',
+    department: 'WARD',
   });
 
   // Password reset form
@@ -75,7 +99,7 @@ export function UserManagement() {
 
   useEffect(() => {
     fetchUsers();
-    fetchPatientsAndDoctors();
+    fetchLinkableRecords();
   }, [filterRole]);
 
   const fetchUsers = async () => {
@@ -107,7 +131,7 @@ export function UserManagement() {
     }
   };
 
-  const fetchPatientsAndDoctors = async () => {
+  const fetchLinkableRecords = async () => {
     try {
       // Fetch patients without user_id for linking
       const { data: patientsData } = await supabase
@@ -126,8 +150,35 @@ export function UserManagement() {
         .order('name');
       
       setDoctors(doctorsData || []);
+
+      // Fetch nurses without user_id for linking
+      const { data: nursesData } = await supabase
+        .from('nurses')
+        .select('id, name, nurse_no, department')
+        .is('user_id', null)
+        .order('name');
+      
+      setNurses(nursesData || []);
+
+      // Fetch medtechs without user_id for linking
+      const { data: medtechsData } = await supabase
+        .from('medtechs')
+        .select('id, name, account_number')
+        .is('user_id', null)
+        .order('name');
+      
+      setMedtechs(medtechsData || []);
+
+      // Fetch radtechs without user_id for linking
+      const { data: radtechsData } = await supabase
+        .from('radtechs')
+        .select('id, name, account_number')
+        .is('user_id', null)
+        .order('name');
+      
+      setRadtechs(radtechsData || []);
     } catch (error) {
-      console.error('Error fetching patients/doctors:', error);
+      console.error('Error fetching linkable records:', error);
     }
   };
 
@@ -153,6 +204,7 @@ export function UserManagement() {
           password: newUser.password,
           linkedId: newUser.linkedId || undefined,
           specialty: newUser.role === 'doctor' ? newUser.specialty : undefined,
+          department: newUser.role === 'nurse' ? newUser.department : undefined,
         },
       });
 
@@ -167,9 +219,10 @@ export function UserManagement() {
         password: '',
         linkedId: '',
         specialty: 'General Practice',
+        department: 'WARD',
       });
       fetchUsers();
-      fetchPatientsAndDoctors();
+      fetchLinkableRecords();
     } catch (error: any) {
       console.error('Error creating user:', error);
       toast.error(error.message || 'Failed to create user');
@@ -240,6 +293,7 @@ export function UserManagement() {
     switch (role) {
       case 'staff': return 'default';
       case 'doctor': return 'secondary';
+      case 'nurse': return 'secondary';
       case 'medtech': return 'outline';
       case 'radtech': return 'outline';
       case 'patient': return 'secondary';
@@ -256,6 +310,7 @@ export function UserManagement() {
     const prefixes: Record<string, string> = {
       staff: 'STAFF',
       doctor: 'DOC',
+      nurse: 'NUR',
       medtech: 'MT',
       radtech: 'RT',
       patient: 'PAT',
@@ -400,6 +455,96 @@ export function UserManagement() {
                       </div>
                     )}
                   </>
+                )}
+
+                {newUser.role === 'nurse' && (
+                  <>
+                    <div className="space-y-2">
+                      <Label>Department</Label>
+                      <Select 
+                        value={newUser.department} 
+                        onValueChange={(value) => setNewUser(prev => ({ ...prev, department: value }))}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="WARD">Ward</SelectItem>
+                          <SelectItem value="ICU">ICU</SelectItem>
+                          <SelectItem value="ER">Emergency Room</SelectItem>
+                          <SelectItem value="OR">Operating Room</SelectItem>
+                          <SelectItem value="OB">OB-GYN</SelectItem>
+                          <SelectItem value="PEDIA">Pediatrics</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {nurses.length > 0 && (
+                      <div className="space-y-2">
+                        <Label>Link to Existing Nurse (Optional)</Label>
+                        <Select 
+                          value={newUser.linkedId || "__new__"} 
+                          onValueChange={(value) => setNewUser(prev => ({ ...prev, linkedId: value === "__new__" ? "" : value }))}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select existing nurse" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__new__">Create new record</SelectItem>
+                            {nurses.map(nurse => (
+                              <SelectItem key={nurse.id} value={nurse.id}>
+                                {nurse.name} ({nurse.nurse_no} - {nurse.department})
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {newUser.role === 'medtech' && medtechs.length > 0 && (
+                  <div className="space-y-2">
+                    <Label>Link to Existing MedTech (Optional)</Label>
+                    <Select 
+                      value={newUser.linkedId || "__new__"} 
+                      onValueChange={(value) => setNewUser(prev => ({ ...prev, linkedId: value === "__new__" ? "" : value }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select existing medtech" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__new__">Create new record</SelectItem>
+                        {medtechs.map(mt => (
+                          <SelectItem key={mt.id} value={mt.id}>
+                            {mt.name} ({mt.account_number})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                {newUser.role === 'radtech' && radtechs.length > 0 && (
+                  <div className="space-y-2">
+                    <Label>Link to Existing RadTech (Optional)</Label>
+                    <Select 
+                      value={newUser.linkedId || "__new__"} 
+                      onValueChange={(value) => setNewUser(prev => ({ ...prev, linkedId: value === "__new__" ? "" : value }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select existing radtech" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__new__">Create new record</SelectItem>
+                        {radtechs.map(rt => (
+                          <SelectItem key={rt.id} value={rt.id}>
+                            {rt.name} ({rt.account_number})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 )}
 
                 {newUser.role === 'patient' && patients.length > 0 && (
