@@ -1021,7 +1021,13 @@ export type Database = {
         | "Thoracic Surgery"
         | "Urology"
       patient_status: "active" | "archived"
-      user_role: "staff" | "medtech" | "radtech" | "patient" | "doctor"
+      user_role:
+        | "staff"
+        | "medtech"
+        | "radtech"
+        | "patient"
+        | "doctor"
+        | "nurse"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1189,7 +1195,7 @@ export const Constants = {
         "Urology",
       ],
       patient_status: ["active", "archived"],
-      user_role: ["staff", "medtech", "radtech", "patient", "doctor"],
+      user_role: ["staff", "medtech", "radtech", "patient", "doctor", "nurse"],
     },
   },
 } as const
