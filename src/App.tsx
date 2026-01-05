@@ -18,6 +18,7 @@ import Settings from "./pages/dashboard/Settings";
 import Messages from "./pages/dashboard/Messages";
 import HelpSupport from "./pages/dashboard/HelpSupport";
 import MyRecords from "./pages/dashboard/MyRecords";
+import ShiftHandover from "./pages/dashboard/ShiftHandover";
 import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./components/ProtectedRoute";
 
@@ -53,6 +54,7 @@ function App() {
               <Route path="messages" element={<Messages />} />
               <Route path="help-support" element={<HelpSupport />} />
               <Route path="my-records" element={<MyRecords />} />
+              <Route path="shift-handover" element={<ShiftHandover />} />
             </Route>
             <Route path="*" element={<Navigate to="/auth" replace />} />
           </Routes>
