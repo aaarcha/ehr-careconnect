@@ -15,6 +15,7 @@ import { FDARNotes } from "@/components/clinical/FDARNotes";
 import { MedicationAdministration } from "@/components/clinical/MedicationAdministration";
 import { IntakeOutputRecord } from "@/components/clinical/IntakeOutputRecord";
 import { IVFluidMonitoring } from "@/components/clinical/IVFluidMonitoring";
+import { VitalSignsQuickEntry } from "@/components/clinical/VitalSignsQuickEntry";
 import PrintPreviewDialog from "@/components/clinical/PrintPreviewDialog";
 import { format, differenceInYears } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -1684,8 +1685,11 @@ const PatientRecord = () => {
 
         {/* VITALS TAB CONTENT */}
         <TabsContent value="vitals" className="space-y-4">
+          <div className="flex justify-end">
+            <VitalSignsQuickEntry patientId={patient.id} onSuccess={() => fetchData(id!, doctors)} />
+          </div>
           {vitalSigns.length === 0 ? (
-            <div className="text-center p-8 border rounded-lg bg-gray-50">
+            <div className="text-center p-8 border rounded-lg bg-muted/30">
               <p className="text-muted-foreground">No vital signs have been recorded yet.</p>
             </div>
           ) : (

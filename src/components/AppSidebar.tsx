@@ -1,6 +1,6 @@
 import { 
   Home, Users, UserCog, FileText, FilePlus, TestTube, Scan, 
-  Settings, MessageSquare, HelpCircle, Loader2, Menu, LogOut, User
+  Settings, MessageSquare, HelpCircle, Loader2, Menu, LogOut, User, ArrowRightLeft
 } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import {
@@ -174,6 +174,7 @@ export function AppSidebar() {
     if (role === 'nurse') {
       return [
         ...baseItems,
+        { title: "Shift Handover", url: "/dashboard/shift-handover", icon: ArrowRightLeft },
         { title: "Nurses", url: "/dashboard/nurses", icon: UserCog },
         { title: "Patient Records", url: "/dashboard/patients", icon: FileText },
         { title: "Laboratory", url: "/dashboard/laboratory", icon: TestTube },

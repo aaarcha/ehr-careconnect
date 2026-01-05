@@ -873,6 +873,75 @@ export type Database = {
         }
         Relationships: []
       }
+      shift_handovers: {
+        Row: {
+          acknowledged_at: string | null
+          created_at: string
+          critical_alerts: string | null
+          department: string
+          general_notes: string | null
+          id: string
+          incoming_nurse_id: string | null
+          medications_due: string | null
+          outgoing_nurse_id: string | null
+          patient_summary: Json | null
+          pending_tasks: string | null
+          shift_date: string
+          shift_time: string
+          status: string | null
+          updated_at: string
+        }
+        Insert: {
+          acknowledged_at?: string | null
+          created_at?: string
+          critical_alerts?: string | null
+          department: string
+          general_notes?: string | null
+          id?: string
+          incoming_nurse_id?: string | null
+          medications_due?: string | null
+          outgoing_nurse_id?: string | null
+          patient_summary?: Json | null
+          pending_tasks?: string | null
+          shift_date?: string
+          shift_time: string
+          status?: string | null
+          updated_at?: string
+        }
+        Update: {
+          acknowledged_at?: string | null
+          created_at?: string
+          critical_alerts?: string | null
+          department?: string
+          general_notes?: string | null
+          id?: string
+          incoming_nurse_id?: string | null
+          medications_due?: string | null
+          outgoing_nurse_id?: string | null
+          patient_summary?: Json | null
+          pending_tasks?: string | null
+          shift_date?: string
+          shift_time?: string
+          status?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shift_handovers_incoming_nurse_id_fkey"
+            columns: ["incoming_nurse_id"]
+            isOneToOne: false
+            referencedRelation: "nurses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shift_handovers_outgoing_nurse_id_fkey"
+            columns: ["outgoing_nurse_id"]
+            isOneToOne: false
+            referencedRelation: "nurses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       support_tickets: {
         Row: {
           category: string
