@@ -35,8 +35,8 @@ const ROLE_OPTIONS = [
   { value: 'staff', label: 'Admin/Staff' },
   { value: 'doctor', label: 'Doctor' },
   { value: 'nurse', label: 'Nurse' },
-  { value: 'medtech', label: 'Laboratory Technician' },
-  { value: 'radtech', label: 'Imaging Technician' },
+  { value: 'medtech', label: 'Medical Technology' },
+  { value: 'radtech', label: 'Radiologic Technician' },
   { value: 'patient', label: 'Patient' },
 ];
 
@@ -503,15 +503,15 @@ export function UserManagement() {
                   </>
                 )}
 
-                {newUser.role === 'medtech' && medtechs.length > 0 && (
+                {newUser.role === 'medtech' && (
                   <div className="space-y-2">
-                    <Label>Link to Existing MedTech (Optional)</Label>
+                    <Label>Link to Existing Medical Technologist (Optional)</Label>
                     <Select 
                       value={newUser.linkedId || "__new__"} 
                       onValueChange={(value) => setNewUser(prev => ({ ...prev, linkedId: value === "__new__" ? "" : value }))}
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Select existing medtech" />
+                        <SelectValue placeholder="Select existing technologist" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="__new__">Create new record</SelectItem>
@@ -525,15 +525,15 @@ export function UserManagement() {
                   </div>
                 )}
 
-                {newUser.role === 'radtech' && radtechs.length > 0 && (
+                {newUser.role === 'radtech' && (
                   <div className="space-y-2">
-                    <Label>Link to Existing RadTech (Optional)</Label>
+                    <Label>Link to Existing Radiologic Technologist (Optional)</Label>
                     <Select 
                       value={newUser.linkedId || "__new__"} 
                       onValueChange={(value) => setNewUser(prev => ({ ...prev, linkedId: value === "__new__" ? "" : value }))}
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Select existing radtech" />
+                        <SelectValue placeholder="Select existing technologist" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="__new__">Create new record</SelectItem>
