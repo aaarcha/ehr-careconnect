@@ -1,6 +1,7 @@
 import { 
   Home, Users, UserCog, FileText, FilePlus, TestTube, Scan, 
-  Settings, MessageSquare, HelpCircle, Loader2, Menu, LogOut, User, ArrowRightLeft
+  Settings, MessageSquare, HelpCircle, Loader2, Menu, LogOut, User, ArrowRightLeft,
+  LayoutDashboard, HeartPulse, FlaskConical, Mail, ClipboardList, Microscope
 } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import {
@@ -140,85 +141,85 @@ export function AppSidebar() {
 
   // --- NAVIGATION ITEMS DEFINITION ---
   const getNavItems = (role: string | null): NavItem[] => {
-    const baseItems: NavItem[] = [
-      { title: "Dashboard", url: "/dashboard", icon: Home },
-    ];
-    
-    // STAFF/ADMIN MENU (Full access including user management)
+    // STAFF/ADMIN MENU (Full access to all system features)
     if (role === 'staff') {
       return [
-        ...baseItems,
-        { title: "Decking", url: "/dashboard/decking", icon: Users },
-        { title: "Nurses", url: "/dashboard/nurses", icon: UserCog },
-        { title: "Patient Records", url: "/dashboard/patients", icon: FileText },
-        { title: "Add Patient", url: "/dashboard/add-patient", icon: FilePlus },
-        { title: "Laboratory", url: "/dashboard/laboratory", icon: TestTube },
+        { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
+        { title: "Patients", url: "/dashboard/patients", icon: Users },
+        { title: "Nurses", url: "/dashboard/nurses", icon: HeartPulse },
+        { title: "Laboratory", url: "/dashboard/laboratory", icon: FlaskConical },
         { title: "Imaging", url: "/dashboard/imaging", icon: Scan },
+        { title: "Technologists", url: "/dashboard/technologists", icon: Microscope },
+        { title: "Shift Handover", url: "/dashboard/shift-handover", icon: ClipboardList },
+        { title: "Messages", url: "/dashboard/messages", icon: Mail },
+        { title: "Help & Support", url: "/dashboard/help-support", icon: HelpCircle },
       ];
     }
-
-    // DOCTOR MENU (Full access to clinical features, no user management)
-    if (role === 'doctor') {
-      return [
-        ...baseItems,
-        { title: "Decking", url: "/dashboard/decking", icon: Users },
-        { title: "Nurses", url: "/dashboard/nurses", icon: UserCog },
-        { title: "Patient Records", url: "/dashboard/patients", icon: FileText },
-        { title: "Add Patient", url: "/dashboard/add-patient", icon: FilePlus },
-        { title: "Laboratory", url: "/dashboard/laboratory", icon: TestTube },
-        { title: "Imaging", url: "/dashboard/imaging", icon: Scan },
-      ];
-    }
-
-    // NURSE MENU (Clinical documentation access)
-    if (role === 'nurse') {
-      return [
-        ...baseItems,
-        { title: "Shift Handover", url: "/dashboard/shift-handover", icon: ArrowRightLeft },
-        { title: "Nurses", url: "/dashboard/nurses", icon: UserCog },
-        { title: "Patient Records", url: "/dashboard/patients", icon: FileText },
-        { title: "Laboratory", url: "/dashboard/laboratory", icon: TestTube },
-        { title: "Imaging", url: "/dashboard/imaging", icon: Scan },
-      ];
-    }
-
-    // MEDTECH MENU (Limited to laboratory)
-    if (role === 'medtech') {
-      return [
-        ...baseItems,
-        { title: "Laboratory", url: "/dashboard/laboratory", icon: TestTube },
-      ];
-    }
-
-    // RADTECH MENU (Limited to imaging)
-    if (role === 'radtech') {
-      return [
-        ...baseItems,
-        { title: "Imaging", url: "/dashboard/imaging", icon: Scan },
-      ];
-    }
-
-    // PATIENT MENU (Limited to own records)
+    
+    // PATIENT MENU (Limited to own records ONLY - NO other access)
     if (role === 'patient') {
       return [
-        ...baseItems,
         { title: "My Records", url: "/dashboard/my-records", icon: FileText },
+        { title: "Help & Support", url: "/dashboard/help-support", icon: HelpCircle },
       ];
     }
-
-    // Default or Unknown Role
-    return baseItems;
+    
+    // DOCTOR MENU (Clinical access, broad patient information)
+    if (role === 'doctor') {
+      return [
+        { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
+        { title: "Patients", url: "/dashboard/patients", icon: Users },
+        { title: "Laboratory", url: "/dashboard/laboratory", icon: FlaskConical },
+        { title: "Imaging", url: "/dashboard/imaging", icon: Scan },
+        { title: "Shift Handover", url: "/dashboard/shift-handover", icon: ClipboardList },
+        { title: "Messages", url: "/dashboard/messages", icon: Mail },
+        { title: "Help & Support", url: "/dashboard/help-support", icon: HelpCircle },
+      ];
+    }
+    
+    // NURSE MENU (Clinical documentation focus)
+    if (role === 'nurse') {
+      return [
+        { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
+        { title: "Patients", url: "/dashboard/patients", icon: Users },
+        { title: "Laboratory", url: "/dashboard/laboratory", icon: FlaskConical },
+        { title: "Imaging", url: "/dashboard/imaging", icon: Scan },
+        { title: "Shift Handover", url: "/dashboard/shift-handover", icon: ClipboardList },
+        { title: "Messages", url: "/dashboard/messages", icon: Mail },
+        { title: "Help & Support", url: "/dashboard/help-support", icon: HelpCircle },
+      ];
+    }
+    
+    // MEDTECH MENU (Laboratory-focused)
+    if (role === 'medtech') {
+      return [
+        { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
+        { title: "Laboratory", url: "/dashboard/laboratory", icon: FlaskConical },
+        { title: "Messages", url: "/dashboard/messages", icon: Mail },
+        { title: "Help & Support", url: "/dashboard/help-support", icon: HelpCircle },
+      ];
+    }
+    
+    // RADTECH MENU (Imaging-focused)
+    if (role === 'radtech') {
+      return [
+        { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
+        { title: "Imaging", url: "/dashboard/imaging", icon: Scan },
+        { title: "Messages", url: "/dashboard/messages", icon: Mail },
+        { title: "Help & Support", url: "/dashboard/help-support", icon: HelpCircle },
+      ];
+    }
+    
+    // Default fallback (should not normally happen)
+    return [
+      { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
+      { title: "Help & Support", url: "/dashboard/help-support", icon: HelpCircle },
+    ];
   };
 
-  // Add common items (Settings, Help, Messages) for all users
+  // For non-patient roles, no additional common items needed as they're already included
   const getFullNavItems = (role: string | null): NavItem[] => {
-    const roleSpecificItems = getNavItems(role);
-    
-    const commonItems: NavItem[] = [
-      { title: "Messages", url: "/dashboard/messages", icon: MessageSquare },
-    ];
-
-    return [...roleSpecificItems, ...commonItems];
+    return getNavItems(role);
   };
 
   const navItems = getFullNavItems(userRole);
