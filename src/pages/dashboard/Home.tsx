@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Navigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Activity, Users, UserPlus, Bed, Stethoscope, Heart, Droplet, Plus, CalendarDays } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -28,6 +29,8 @@ interface Appointment {
 }
 
 const Home = () => {
+  const [userRole, setUserRole] = useState<string | null>(null);
+  const [roleLoading, setRoleLoading] = useState(true);
   const [stats, setStats] = useState({
     emergency: 0,
     inPatient: 0,
@@ -50,14 +53,41 @@ const Home = () => {
   });
 
   useEffect(() => {
-    fetchDashboardData();
-    // Load appointments from localStorage
-    const stored = localStorage.getItem('careconnect_appointments');
-    if (stored) {
-      const parsed = JSON.parse(stored);
-      setAppointments(parsed.map((a: any) => ({ ...a, date: new Date(a.date) })));
-    }
+    fetchUserRole();
   }, []);
+
+  const fetchUserRole = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data } = await supabase
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", user.id)
+          .single();
+        setUserRole(data?.role || null);
+      }
+    } finally {
+      setRoleLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!roleLoading && userRole !== 'patient') {
+      fetchDashboardData();
+      // Load appointments from localStorage
+      const stored = localStorage.getItem('careconnect_appointments');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        setAppointments(parsed.map((a: any) => ({ ...a, date: new Date(a.date) })));
+      }
+    }
+  }, [roleLoading, userRole]);
+
+  // Redirect patients to My Records
+  if (!roleLoading && userRole === 'patient') {
+    return <Navigate to="/dashboard/my-records" replace />;
+  }
 
   const fetchDashboardData = async () => {
     try {
