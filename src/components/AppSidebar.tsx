@@ -152,32 +152,29 @@ export function AppSidebar() {
         { title: "Technologists", url: "/dashboard/technologists", icon: Microscope },
         { title: "Shift Handover", url: "/dashboard/shift-handover", icon: ClipboardList },
         { title: "Messages", url: "/dashboard/messages", icon: Mail },
-        { title: "Help & Support", url: "/dashboard/help-support", icon: HelpCircle },
       ];
     }
     
     // PATIENT MENU (Limited to own records ONLY - NO other access)
+    // Help & Support removed - accessible via header dropdown
     if (role === 'patient') {
       return [
         { title: "My Records", url: "/dashboard/my-records", icon: FileText },
-        { title: "Help & Support", url: "/dashboard/help-support", icon: HelpCircle },
       ];
     }
     
-    // DOCTOR MENU (Clinical access, broad patient information)
+    // DOCTOR MENU (Clinical access - NO Shift Handover, NO Help in sidebar)
     if (role === 'doctor') {
       return [
         { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
         { title: "Patients", url: "/dashboard/patients", icon: Users },
         { title: "Laboratory", url: "/dashboard/laboratory", icon: FlaskConical },
         { title: "Imaging", url: "/dashboard/imaging", icon: Scan },
-        { title: "Shift Handover", url: "/dashboard/shift-handover", icon: ClipboardList },
         { title: "Messages", url: "/dashboard/messages", icon: Mail },
-        { title: "Help & Support", url: "/dashboard/help-support", icon: HelpCircle },
       ];
     }
     
-    // NURSE MENU (Clinical documentation focus)
+    // NURSE MENU (Clinical documentation focus - includes Shift Handover)
     if (role === 'nurse') {
       return [
         { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
@@ -186,7 +183,6 @@ export function AppSidebar() {
         { title: "Imaging", url: "/dashboard/imaging", icon: Scan },
         { title: "Shift Handover", url: "/dashboard/shift-handover", icon: ClipboardList },
         { title: "Messages", url: "/dashboard/messages", icon: Mail },
-        { title: "Help & Support", url: "/dashboard/help-support", icon: HelpCircle },
       ];
     }
     
@@ -196,7 +192,6 @@ export function AppSidebar() {
         { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
         { title: "Laboratory", url: "/dashboard/laboratory", icon: FlaskConical },
         { title: "Messages", url: "/dashboard/messages", icon: Mail },
-        { title: "Help & Support", url: "/dashboard/help-support", icon: HelpCircle },
       ];
     }
     
@@ -206,14 +201,12 @@ export function AppSidebar() {
         { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
         { title: "Imaging", url: "/dashboard/imaging", icon: Scan },
         { title: "Messages", url: "/dashboard/messages", icon: Mail },
-        { title: "Help & Support", url: "/dashboard/help-support", icon: HelpCircle },
       ];
     }
     
     // Default fallback (should not normally happen)
     return [
       { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
-      { title: "Help & Support", url: "/dashboard/help-support", icon: HelpCircle },
     ];
   };
 
