@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -6,8 +6,9 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { User, Activity, Pill, FileText, TestTube, Scan, Heart, Loader2 } from "lucide-react";
+import { User, Activity, Pill, FileText, TestTube, Scan, Heart, Loader2, TrendingUp } from "lucide-react";
 import { format } from "date-fns";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 interface PatientData {
   id: string;
@@ -68,6 +69,202 @@ interface Medication {
   route?: string;
   start_date?: string;
   end_date?: string;
+}
+
+// Vital Signs Trend Charts Component
+function VitalSignsTrendCharts({ vitalSigns }: { vitalSigns: VitalSign[] }) {
+  // Prepare chart data - sort chronologically (oldest first for proper trend visualization)
+  const chartData = useMemo(() => {
+    return [...vitalSigns]
+      .reverse()
+      .map((vital) => {
+        // Parse blood pressure to get systolic/diastolic
+        const bpParts = vital.blood_pressure?.split('/') || [];
+        const systolic = bpParts[0] ? parseInt(bpParts[0]) : null;
+        const diastolic = bpParts[1] ? parseInt(bpParts[1]) : null;
+        
+        return {
+          date: format(new Date(vital.recorded_at), 'MMM d'),
+          fullDate: format(new Date(vital.recorded_at), 'MMM d, yyyy h:mm a'),
+          heartRate: vital.heart_rate || null,
+          temperature: vital.temperature || null,
+          oxygenSaturation: vital.oxygen_saturation || null,
+          respiratoryRate: vital.respiratory_rate || null,
+          painScale: vital.pain_scale ?? null,
+          systolic,
+          diastolic,
+        };
+      });
+  }, [vitalSigns]);
+
+  if (vitalSigns.length === 0) {
+    return (
+      <Card>
+        <CardContent className="flex flex-col items-center justify-center py-12">
+          <TrendingUp className="h-12 w-12 text-muted-foreground mb-4" />
+          <p className="text-muted-foreground">No vital signs data available for trending.</p>
+          <p className="text-sm text-muted-foreground">Charts will appear once vital signs are recorded.</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (vitalSigns.length < 2) {
+    return (
+      <Card>
+        <CardContent className="flex flex-col items-center justify-center py-12">
+          <TrendingUp className="h-12 w-12 text-muted-foreground mb-4" />
+          <p className="text-muted-foreground">Not enough data points for trending.</p>
+          <p className="text-sm text-muted-foreground">At least 2 vital sign readings are needed to show trends.</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      {/* Heart Rate Chart */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Heart className="h-4 w-4 text-red-500" />
+            Heart Rate Trend
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ResponsiveContainer width="100%" height={200}>
+            <LineChart data={chartData}>
+              <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+              <XAxis dataKey="date" tick={{ fontSize: 12 }} className="text-muted-foreground" />
+              <YAxis domain={['auto', 'auto']} tick={{ fontSize: 12 }} className="text-muted-foreground" />
+              <Tooltip 
+                contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
+                labelFormatter={(label, payload) => payload[0]?.payload?.fullDate || label}
+              />
+              <Legend />
+              <Line 
+                type="monotone" 
+                dataKey="heartRate" 
+                name="Heart Rate (bpm)" 
+                stroke="hsl(0, 84%, 60%)" 
+                strokeWidth={2}
+                dot={{ fill: 'hsl(0, 84%, 60%)' }}
+                connectNulls
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </CardContent>
+      </Card>
+
+      {/* Blood Pressure Chart */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Activity className="h-4 w-4 text-blue-500" />
+            Blood Pressure Trend
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ResponsiveContainer width="100%" height={200}>
+            <LineChart data={chartData}>
+              <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+              <XAxis dataKey="date" tick={{ fontSize: 12 }} className="text-muted-foreground" />
+              <YAxis domain={['auto', 'auto']} tick={{ fontSize: 12 }} className="text-muted-foreground" />
+              <Tooltip 
+                contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
+                labelFormatter={(label, payload) => payload[0]?.payload?.fullDate || label}
+              />
+              <Legend />
+              <Line 
+                type="monotone" 
+                dataKey="systolic" 
+                name="Systolic (mmHg)" 
+                stroke="hsl(220, 70%, 50%)" 
+                strokeWidth={2}
+                dot={{ fill: 'hsl(220, 70%, 50%)' }}
+                connectNulls
+              />
+              <Line 
+                type="monotone" 
+                dataKey="diastolic" 
+                name="Diastolic (mmHg)" 
+                stroke="hsl(200, 70%, 50%)" 
+                strokeWidth={2}
+                dot={{ fill: 'hsl(200, 70%, 50%)' }}
+                connectNulls
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </CardContent>
+      </Card>
+
+      {/* Temperature Chart */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Activity className="h-4 w-4 text-orange-500" />
+            Temperature Trend
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ResponsiveContainer width="100%" height={200}>
+            <LineChart data={chartData}>
+              <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+              <XAxis dataKey="date" tick={{ fontSize: 12 }} className="text-muted-foreground" />
+              <YAxis domain={[35, 40]} tick={{ fontSize: 12 }} className="text-muted-foreground" />
+              <Tooltip 
+                contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
+                labelFormatter={(label, payload) => payload[0]?.payload?.fullDate || label}
+              />
+              <Legend />
+              <Line 
+                type="monotone" 
+                dataKey="temperature" 
+                name="Temperature (°C)" 
+                stroke="hsl(25, 95%, 53%)" 
+                strokeWidth={2}
+                dot={{ fill: 'hsl(25, 95%, 53%)' }}
+                connectNulls
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </CardContent>
+      </Card>
+
+      {/* Oxygen Saturation Chart */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Activity className="h-4 w-4 text-emerald-500" />
+            Oxygen Saturation Trend
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ResponsiveContainer width="100%" height={200}>
+            <LineChart data={chartData}>
+              <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+              <XAxis dataKey="date" tick={{ fontSize: 12 }} className="text-muted-foreground" />
+              <YAxis domain={[90, 100]} tick={{ fontSize: 12 }} className="text-muted-foreground" />
+              <Tooltip 
+                contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
+                labelFormatter={(label, payload) => payload[0]?.payload?.fullDate || label}
+              />
+              <Legend />
+              <Line 
+                type="monotone" 
+                dataKey="oxygenSaturation" 
+                name="O2 Saturation (%)" 
+                stroke="hsl(142, 76%, 36%)" 
+                strokeWidth={2}
+                dot={{ fill: 'hsl(142, 76%, 36%)' }}
+                connectNulls
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </CardContent>
+      </Card>
+    </div>
+  );
 }
 
 export default function MyRecords() {
@@ -250,8 +447,9 @@ export default function MyRecords() {
 
       {/* Tabs for different record types */}
       <Tabs defaultValue="overview" className="w-full">
-        <TabsList className="grid w-full grid-cols-2 md:grid-cols-5">
+        <TabsList className="grid w-full grid-cols-3 md:grid-cols-6">
           <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="trends">Trends</TabsTrigger>
           <TabsTrigger value="vitals">Vital Signs</TabsTrigger>
           <TabsTrigger value="medications">Medications</TabsTrigger>
           <TabsTrigger value="labs">Lab Results</TabsTrigger>
@@ -347,6 +545,11 @@ export default function MyRecords() {
               </CardContent>
             </Card>
           )}
+        </TabsContent>
+
+        {/* Trends Tab - Vital Signs Charts */}
+        <TabsContent value="trends" className="space-y-4">
+          <VitalSignsTrendCharts vitalSigns={vitalSigns} />
         </TabsContent>
 
         {/* Vital Signs Tab */}
