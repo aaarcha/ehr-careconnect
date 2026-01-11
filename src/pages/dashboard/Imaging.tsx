@@ -11,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Plus, Edit, Trash2, Scan, Settings, Image as ImageIcon } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { imagingSchema } from "@/lib/validation";
 import { z } from "zod";
@@ -20,6 +21,7 @@ interface RadTech {
   id: string;
   name: string;
   account_number: string;
+  user_id: string | null;
 }
 
 interface ImagingResult {
@@ -477,6 +479,7 @@ const Imaging = () => {
                       <TableRow>
                         <TableHead>Name</TableHead>
                         <TableHead>Account Number</TableHead>
+                        <TableHead>Account Status</TableHead>
                         <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -484,6 +487,12 @@ const Imaging = () => {
                       {radtechs.map((radtech) => (
                         <TableRow key={radtech.id}>
                           <TableCell>{radtech.name}</TableCell>
+                          <TableCell>{radtech.account_number}</TableCell>
+                          <TableCell>
+                            <Badge variant={radtech.user_id ? "default" : "secondary"}>
+                              {radtech.user_id ? "Linked" : "Not Linked"}
+                            </Badge>
+                          </TableCell>
                           <TableCell>{radtech.account_number}</TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-2">

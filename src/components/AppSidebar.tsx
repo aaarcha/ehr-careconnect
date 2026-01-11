@@ -1,7 +1,7 @@
 import { 
   Home, Users, UserCog, FileText, FilePlus, TestTube, Scan, 
   Settings, MessageSquare, HelpCircle, Loader2, Menu, LogOut, User, ArrowRightLeft,
-  LayoutDashboard, HeartPulse, FlaskConical, Mail, ClipboardList, Microscope
+  LayoutDashboard, HeartPulse, FlaskConical, Mail, ClipboardList, Stethoscope
 } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import {
@@ -146,10 +146,10 @@ export function AppSidebar() {
       return [
         { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
         { title: "Patients", url: "/dashboard/patients", icon: Users },
+        { title: "Doctors", url: "/dashboard/decking", icon: Stethoscope },
         { title: "Nurses", url: "/dashboard/nurses", icon: HeartPulse },
         { title: "Laboratory", url: "/dashboard/laboratory", icon: FlaskConical },
         { title: "Imaging", url: "/dashboard/imaging", icon: Scan },
-        { title: "Technologists", url: "/dashboard/technologists", icon: Microscope },
         { title: "Shift Handover", url: "/dashboard/shift-handover", icon: ClipboardList },
         { title: "Messages", url: "/dashboard/messages", icon: Mail },
       ];
@@ -168,6 +168,7 @@ export function AppSidebar() {
       return [
         { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
         { title: "Patients", url: "/dashboard/patients", icon: Users },
+        { title: "Doctors", url: "/dashboard/decking", icon: Stethoscope },
         { title: "Laboratory", url: "/dashboard/laboratory", icon: FlaskConical },
         { title: "Imaging", url: "/dashboard/imaging", icon: Scan },
         { title: "Messages", url: "/dashboard/messages", icon: Mail },
@@ -179,6 +180,7 @@ export function AppSidebar() {
       return [
         { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
         { title: "Patients", url: "/dashboard/patients", icon: Users },
+        { title: "Doctors", url: "/dashboard/decking", icon: Stethoscope },
         { title: "Laboratory", url: "/dashboard/laboratory", icon: FlaskConical },
         { title: "Imaging", url: "/dashboard/imaging", icon: Scan },
         { title: "Shift Handover", url: "/dashboard/shift-handover", icon: ClipboardList },

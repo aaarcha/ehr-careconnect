@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Plus, Edit, Trash2, TestTube, Settings } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { labResultSchema } from "@/lib/validation";
 import { z } from "zod";
@@ -17,6 +18,7 @@ interface MedTech {
   id: string;
   name: string;
   account_number: string;
+  user_id: string | null;
 }
 
 interface LabTest {
@@ -489,6 +491,7 @@ const Laboratory = () => {
                       <TableRow>
                         <TableHead>Name</TableHead>
                         <TableHead>Account Number</TableHead>
+                        <TableHead>Account Status</TableHead>
                         <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -497,6 +500,11 @@ const Laboratory = () => {
                         <TableRow key={medtech.id}>
                           <TableCell>{medtech.name}</TableCell>
                           <TableCell>{medtech.account_number}</TableCell>
+                          <TableCell>
+                            <Badge variant={medtech.user_id ? "default" : "secondary"}>
+                              {medtech.user_id ? "Linked" : "Not Linked"}
+                            </Badge>
+                          </TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-2">
                               <Button size="sm" variant="ghost" onClick={() => handleEditMedtech(medtech)}>
