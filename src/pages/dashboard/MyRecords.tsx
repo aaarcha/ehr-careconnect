@@ -286,29 +286,47 @@ export default function MyRecords() {
       
       // Get current user
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) {
+        console.log('No authenticated user found');
+        return;
+      }
 
       // Get patient number from user_roles
-      const { data: roleData } = await supabase
+      const { data: roleData, error: roleError } = await supabase
         .from('user_roles')
-        .select('patient_number')
+        .select('patient_number, role')
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
 
-      if (!roleData?.patient_number) {
+      if (roleError) {
+        console.error('Error fetching role:', roleError);
         setLoading(false);
         return;
       }
+
+      if (!roleData?.patient_number) {
+        console.log('No patient_number found in user_roles for user:', user.id);
+        setLoading(false);
+        return;
+      }
+
+      console.log('Looking up patient with hospital_number:', roleData.patient_number);
 
       // Fetch patient data using hospital_number
       const { data: patientData, error: patientError } = await supabase
         .from('patients')
         .select('*')
         .eq('hospital_number', roleData.patient_number)
-        .single();
+        .maybeSingle();
 
-      if (patientError || !patientData) {
+      if (patientError) {
         console.error('Error fetching patient:', patientError);
+        setLoading(false);
+        return;
+      }
+
+      if (!patientData) {
+        console.log('No patient found for hospital_number:', roleData.patient_number);
         setLoading(false);
         return;
       }
