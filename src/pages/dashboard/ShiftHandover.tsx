@@ -238,20 +238,20 @@ export default function ShiftHandover() {
   }
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 p-4 md:p-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold flex items-center gap-2">
-            <ArrowRightLeft className="h-8 w-8 text-primary" />
+          <h1 className="text-2xl md:text-3xl font-bold flex items-center gap-2">
+            <ArrowRightLeft className="h-6 w-6 md:h-8 md:w-8 text-primary" />
             Shift Handover
           </h1>
-          <p className="text-muted-foreground">Document and pass clinical notes to the incoming shift</p>
+          <p className="text-muted-foreground text-sm md:text-base">Document and pass clinical notes to the incoming shift</p>
         </div>
 
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
-            <Button disabled={!currentNurse}>
+            <Button disabled={!currentNurse} className="w-full sm:w-auto">
               <Plus className="h-4 w-4 mr-2" />
               Create Handover
             </Button>
