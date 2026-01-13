@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
-import { Users, Plus, Key, Trash2, Loader2 } from "lucide-react";
+import { Users, Plus, Key, Trash2, Loader2, Mail } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 interface ManagedUser {
@@ -96,6 +96,7 @@ export function UserManagement() {
 
   // Password reset form
   const [newPassword, setNewPassword] = useState('');
+  const [resetMethod, setResetMethod] = useState<'direct' | 'email'>('direct');
 
   useEffect(() => {
     fetchUsers();
@@ -232,40 +233,72 @@ export function UserManagement() {
   };
 
   const handleResetPassword = async () => {
-    if (!selectedUser || !newPassword) {
-      toast.error('Please enter a new password');
-      return;
+    if (!selectedUser) return;
+
+    if (resetMethod === 'direct') {
+      if (!newPassword) {
+        toast.error('Please enter a new password');
+        return;
+      }
+
+      if (newPassword.length < 8) {
+        toast.error('Password must be at least 8 characters');
+        return;
+      }
+
+      setSaving(true);
+      try {
+        const response = await supabase.functions.invoke('manage-users', {
+          method: 'POST',
+          body: {
+            role: selectedUser.role,
+            name: selectedUser.display_name,
+            accountNumber: selectedUser.account_number,
+            password: newPassword,
+          },
+        });
+
+        if (response.error) throw response.error;
+
+        toast.success('Password reset successfully');
+        handleCloseResetDialog();
+      } catch (error: any) {
+        console.error('Error resetting password:', error);
+        toast.error(error.message || 'Failed to reset password');
+      } finally {
+        setSaving(false);
+      }
+    } else {
+      // Send reset email
+      setSaving(true);
+      try {
+        const email = `${selectedUser.account_number.toLowerCase()}@careconnect.com`;
+        const response = await supabase.functions.invoke('send-password-reset', {
+          body: {
+            email,
+            redirectTo: `${window.location.origin}/auth?mode=reset`
+          },
+        });
+
+        if (response.error) throw response.error;
+        if (response.data?.error) throw new Error(response.data.error);
+
+        toast.success(`Password reset email sent to ${email}`);
+        handleCloseResetDialog();
+      } catch (error: any) {
+        console.error('Error sending reset email:', error);
+        toast.error(error.message || 'Failed to send reset email');
+      } finally {
+        setSaving(false);
+      }
     }
+  };
 
-    if (newPassword.length < 8) {
-      toast.error('Password must be at least 8 characters');
-      return;
-    }
-
-    setSaving(true);
-    try {
-      const response = await supabase.functions.invoke('manage-users', {
-        method: 'POST',
-        body: {
-          role: selectedUser.role,
-          name: selectedUser.display_name,
-          accountNumber: selectedUser.account_number,
-          password: newPassword,
-        },
-      });
-
-      if (response.error) throw response.error;
-
-      toast.success('Password reset successfully');
-      setResetDialogOpen(false);
-      setSelectedUser(null);
-      setNewPassword('');
-    } catch (error: any) {
-      console.error('Error resetting password:', error);
-      toast.error(error.message || 'Failed to reset password');
-    } finally {
-      setSaving(false);
-    }
+  const handleCloseResetDialog = () => {
+    setResetDialogOpen(false);
+    setSelectedUser(null);
+    setNewPassword('');
+    setResetMethod('direct');
   };
 
   const handleDeleteUser = async (user: ManagedUser) => {
@@ -635,27 +668,66 @@ export function UserManagement() {
         )}
 
         {/* Password Reset Dialog */}
-        <Dialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
+        <Dialog open={resetDialogOpen} onOpenChange={handleCloseResetDialog}>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Reset Password</DialogTitle>
               <DialogDescription>
-                Set a new password for {selectedUser?.display_name}
+                Choose how to reset password for {selectedUser?.display_name}
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
+              {/* Reset Method Selection */}
               <div className="space-y-2">
-                <Label>New Password</Label>
-                <Input 
-                  type="password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="Minimum 8 characters"
-                />
+                <Label>Reset Method</Label>
+                <Select value={resetMethod} onValueChange={(v) => setResetMethod(v as 'direct' | 'email')}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="direct">
+                      <div className="flex items-center gap-2">
+                        <Key className="h-4 w-4" />
+                        Set password directly (Admin)
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="email">
+                      <div className="flex items-center gap-2">
+                        <Mail className="h-4 w-4" />
+                        Send reset email to user
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
+
+              {/* Conditional: Direct password entry */}
+              {resetMethod === 'direct' && (
+                <div className="space-y-2">
+                  <Label>New Password</Label>
+                  <Input 
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="Minimum 8 characters"
+                  />
+                </div>
+              )}
+
+              {/* Info message for email option */}
+              {resetMethod === 'email' && (
+                <div className="p-3 bg-muted rounded-lg text-sm space-y-1">
+                  <p>An email will be sent to:</p>
+                  <p className="font-medium">{selectedUser?.account_number.toLowerCase()}@careconnect.com</p>
+                  <p className="text-muted-foreground">
+                    The user will receive a link to set their own password.
+                  </p>
+                </div>
+              )}
+
               <Button onClick={handleResetPassword} className="w-full" disabled={saving}>
                 {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                Reset Password
+                {resetMethod === 'direct' ? 'Reset Password' : 'Send Reset Email'}
               </Button>
             </div>
           </DialogContent>
